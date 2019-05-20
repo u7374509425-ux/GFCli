@@ -7,6 +7,9 @@
 *.Rdata # perso
 *.RData  # par defaut
 
+# projet Rstudio
+*.Rproj
+
 # Example code in package build process
 *-Ex.R
 
