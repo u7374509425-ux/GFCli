@@ -3,7 +3,7 @@
 .Rhistory
 .Rapp.history
 
-# Session Data files
+# Session Data files, utiliser ".rda" pour monter des fichier de donnees, tableau de recap par exemple.
 *.Rdata # perso
 *.RData  # par defaut
 
