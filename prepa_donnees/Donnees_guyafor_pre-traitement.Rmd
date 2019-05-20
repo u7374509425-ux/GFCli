@@ -1,0 +1,697 @@
+---
+title: "Pré-traitement des données Guyafor pour le modèle GFClim WP4"
+author: "StephaneKourou"
+date: "18 octobre 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+<!-- Options de knitr et de R (librairies, ...) --> 
+
+```{r nettoyage, echo=FALSE, message=FALSE}
+# on commence par faire le menage
+rm(list=ls(all=TRUE))
+gc() # garbage collector
+```
+
+```{r Bibliotheque, echo=FALSE, message=FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning=FALSE, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=40))
+# Installation des packages si necessaire et chargement
+Library <- function(Packages) {
+  InstallAndLoad <- function(Package) {
+    if (!Package %in% installed.packages()[, 1]) {install.packages(Package)}
+    require(Package, character.only = TRUE)
+  }
+  invisible(sapply(Packages, InstallAndLoad))
+}
+
+# Ajouter les packages necessaires ici
+Library(c("knitr","tidyverse","dplyr","BIOMASS"))
+```
+
+<!-- Debut du document ci-dessous --> 
+ 
+# Résumé
+Mise au format des données Guyafor pour modele joint croissance mortalité à faire tourner sous Stan. Les données de base sont issues d'une extraction de Guyafor : DataParacouV6.R : cree dispoGuyafor 1887076 obs et 31 variables.
+
+
+
+#1 Création données arbres, calcul Dmax par site et par espece depuis Guyafor 
+Le fichier **Data_guyafor_16esp_to_join.Rdata** contient le résultat de ce script, paramètres (nbmin_arbres=20 ; nbmin_mes=3 ; an_min_meteo=1978)
+
+Le fichier **Data_guyafor_16esp_S0_to_join.Rdata** contient le résultat de ce script, paramètres (nbmin_arbres=0 ; nbmin_mes=3 ; an_min_meteo=1978)
+
+
+## Paramètrage de l'étape 1
+Nombre minimal d'individus par espece et par site : 
+  -fixé à 20 individus : objectif un modèle espèce sur tous les site de Guyane, 
+  -fixé à 0 : objectif modèle multiespèces et multisite.
+
+Nombre minimal de mesure par arbre : 3 pour avoir deux accroissements par arbres et une donnée de mortalité/survie
+
+Année la plus ancienne pour les donnee meteo : d'après les données à disposition
+
+```{r param_etape1, echo=TRUE}
+#1 parametres
+nbmin_arbres <- 0 # nombre minimal d'individus par espece et par site
+nbmin_mes <- 3 # nombre minimal de mesure par arbre
+an_min_meteo<- 1978  # donnee meteo les plus anciennes
+fich_sauv_circ<-"Data16esp_s0_to_join.Rdata"  # nom du fichier de sortie
+
+# choix des espèces
+espGFClim<-c(
+  "Bocoa prouacensis",
+  "Carapa surinamensis",
+  "Chrysophyllum sanguinolentum",
+  "Dicorynia guianensis",
+  "Eperua falcata",
+  "Goupia glabra",
+  "Manilkara bidentata",
+  "Peltogyne venosa",
+  "Qualea rosea",
+  "Ruizterania albiflora",
+  "Sextonia rubra",
+  "Sterculia pruriens",
+  "Symphonia globulifera",
+  "Virola michelii",
+  "Vouacapoua americana",
+  "Bagassa guianensis")
+
+# recherche des nom d'espece les plus presents pour les nom vernaculaires
+# sort(unique(dispoGuyafor$VernName))
+# temp<-dispoGuyafor %>%           # nb individus par espece et par site
+#  mutate(idEsp=paste(Genus,Species)) %>%  # ajout colonne ID pour chaque espece
+#  filter(VernName=="manil marecage") %>%        #on ne garde qu'un nom vernaculaire
+#  group_by(idEsp,idTree) %>%
+#  tally %>%
+#  filter(n>=3) %>%   # un minimum de 3 mesures par arbre
+#  summarise(nbtree = n()) # nb arbre par espece bota
+
+```
+
+## Chargement des données
+ 1. Execution DataParacouV6.R : cree la table "dispoGuyafor", 1887076 obs et 31 variables, ou chargement de l'extration de Guyafor DataParacouV6_st.R  1887076 mesures 30 variables
+
+ 2. Chargement des données sur le type de traitement par placete et par site
+Attention le champs clef est idPlacette absent de la table des données de mesures, issue de DataParacouV6.R
+
+```{r chargement, echo=TRUE}
+load("dispoGuyafor2018.Rdata") # contient une table dispoGuyafor
+
+dataDispoLogg<-read.csv2("foret-Campagne.csv") 
+ForestLogg<-dataDispoLogg %>% 
+   mutate(ForestPlot=paste(NomForet,Libelle)) %>% 
+   select(NomForet,Libelle,ForestPlot,idTraitement,Nom)
+
+```
+
+
+## Construction de tableau pour la selection des arbres et de leur mesures
+
+###1 Selection espece cible et filtre suivant annee Meteo minimum disponible
+
+```{r F_espces, echo=TRUE}
+tabMesures<-dispoGuyafor %>%           
+  mutate(idEsp=paste(Genus,Species),codeEsp=paste(substr(Genus,1,3),"_",substr(Species,1,1),sep="")) %>%  # ajout colonne ID pour chaque espece
+  filter(idEsp%in%espGFClim) %>%          # on ne garde que les 16 especes cibles
+  filter(CensusYear>=an_min_meteo) %>%            # donnee meteo les plus ancienne
+  mutate(NamePlot=paste(Forest,Plot)) %>% # ajout colonne ID pour chaque plot de chaque site
+  left_join(ForestLogg, by=c("NamePlot" = "ForestPlot"))  %>% 
+      # ajout des colonnes  du tableau ForestLogg pour plot correspondant
+  mutate(idForestLoggEsp=paste(Forest,idTraitement,idEsp))  
+     # ajout colonne ID pour chaque traitement de chaque site et chaque espece
+
+# recherche, nb ligne pour une espèce donnée
+#length(tabMesures$idEsp[tabMesures$idEsp=="Bagassa guianensis"])
+```
+Au final il reste 248837 Mesures
+
+###2 Creation d'une liste des arbres selectionnés
+On supprime les arbres à problème : par exemple arbres avec hauteur de mesure modifiée. On perd presque 1/5 des donnees.
+Puis on ne conserve que les arbres avec au moins 3 inventaires. Au final on a 22 545 arbres
+
+```{r l_arbre, echo=TRUE}
+
+tab_arbres<-tabMesures %>%
+  group_by(Forest,NamePlot,idTraitement,idEsp,codeEsp,idTree) %>%
+  summarise(nbmes = n(),nbvivant=sum(CodeAlive)) %>%
+  filter(nbmes>=nbmin_mes) %>%   # un minimum de 3 mesures par arbre  26173obs->22568
+  mutate(idForestLoggEsp=paste(Forest,idTraitement,idEsp), Mort=nbmes-nbvivant) %>%  
+          # ajout colonne ID pour chaque traitement de chaque site
+  select(-nbvivant)
+```
+
+###3 Creation liste des site_traitements selectionnés
+Pour une espèce on ne conserve un site seulement s'il y a assez d'arbres. Pour rappel, le seuil se gère avec le paramètre "nbmin_arbres"
+
+```{r l_site, echo=TRUE}
+tab_esp_site_logg<-tab_arbres %>%
+  group_by(Forest,idTraitement,idEsp,codeEsp) %>%
+  summarise(nbtree = n(),nbmes_esp=sum(nbmes),nbmort=sum(Mort)) %>%
+  filter(nbtree >= nbmin_arbres) %>%    
+     # un minimum de nbmin_arbres individu par espece et par site_traitement 259->165
+  mutate(idForestLoggEsp=paste(Forest,idTraitement,idEsp)) %>% 
+     # ajout colonne ID pour chaque traitement de chaque site
+  select(idEsp,codeEsp,idForestLoggEsp,idTraitement,Forest,nbtree,nbmes_esp,nbmort) %>% 
+     # mise en forme
+  arrange(idEsp,idTraitement)
+```
+
+
+###4 Mise à jour des tables Arbres et Mesures, et création de tableaux résumés
+Suppression des arbres correspondant aux sites_traitement n'ayant pas assez d'arbres par espece. Il reste 22545 arbres. Suppression des mesures correspondantes, il reste 243344 mesures
+Création d'un tableau de correspondance entre Espèce et code espèce
+
+Remarque : pour nbmin_arbres = 20 *Bagassia guianensis* n'est pas retenue car trop peu d'arbres sont recencés
+```{r temp,echo=FALSE}
+# tableau pour une espèce donnée
+Bagasse<-tab_arbres %>%
+  group_by(Forest,idTraitement,idEsp,codeEsp) %>%
+  summarise(nbtree = n(),nbmes_esp=sum(nbmes))%>%
+  filter(idEsp =="Bagassa guianensis") %>% 
+  select(idEsp,codeEsp,Forest,idTraitement,nbtree,nbmes_esp)  # mise en forme
+
+#knitr::kable(Bagasse, caption="Effectif d'arbres et de mesure pour la Bagasse",align=c('r','c','r','c','r','r'))
+
+```
+
+```{r maj_tables, echo=TRUE}
+tab_arbres_select<-tab_arbres%>%  
+      # on enleve de la table "arbres" les individus qui ne sont pas assez nombreux
+  semi_join(tab_esp_site_logg, by=c("idForestLoggEsp"))
+# le semi_joint n'ajoute pas les colonne du second tableau 
+# et supprime les lignes du premier tableau qui ne matchent pas
+
+tabMesuresSelect<-tabMesures%>%   # on enleve de la table mesure les individus non retenus
+  semi_join(tab_arbres_select,by=c("idTree"))
+
+
+#creation de tables descriptives des donnes, par site, par especes
+tab_site_logg<-tab_esp_site_logg %>%      # tableau site, type traitement : nbesp, arbres et mesures
+ group_by(Forest,idTraitement) %>%
+ #arrange(idForestLoggEsp) %>%
+ summarise(nbesp = n(),nbtree_logg=sum(nbtree),nbmes_logg=sum(nbmes_esp),nbmort_logg=sum(nbmort)) %>%
+ select(idTraitement,Forest,nbesp,nbtree_logg,nbmes_logg,nbmort_logg) # mise en forme
+
+tab_esp<-tab_esp_site_logg %>%    # tableau espece, type traitement : nbsitelogg, arbres et mesures
+  group_by(idEsp,codeEsp,idTraitement) %>%
+  summarise(nbsitelogg = n(),nbtree_esp=sum(nbtree),nbmes_esp=sum(nbmes_esp),nbmort_esp=sum(nbmort)) 
+
+# controle : 193934 obs
+#sum(tab_esp_site_logg$nbmes_esp)
+#sum(tab_arbres_select$nbmes)
+#nrow(tabMesuresSelect)
+
+# construction tableau espèce et code espece explicite pour sortie fichier, graphe
+cc_espGFClim<-tabMesuresSelect %>% 
+  select(idEsp,codeEsp) %>% 
+  group_by(idEsp,codeEsp) %>% 
+  summarise() %>% 
+  arrange(idEsp)
+```
+
+```{r tableau_eff,echo=FALSE}
+#knitr::kable(tab_esp, caption="Effectif d'arbres et de mesure par espèce et traitement",align=c('r','c','r','c','c','r','r'))
+```
+##Conversion des circonférence en diamètre et régularisation pour les nouveaux morts
+L'année du constat de la mort d'un individu, on remplace les circonferences des arbres mort par NA sinon on calcule le diametre
+
+```{r cirr_to_diam, echo=TRUE}
+tabMesuresSelect<-tabMesuresSelect %>%
+  mutate(Diam = if_else(CodeAlive == 1, CircCorr/pi, NA_real_))
+```
+
+
+##Calcul du paramètre Dmax 
+Nécessaire dans le modèle de mortalité pour normaliser le diamètre initial et le transformer en une variable d'ontogénie.
+Pratiquement on ne calcul pas le dmax qui est trop volatile, mais le percentile 95. Pour 20 donnée cela correspond à la 2ième plus grande.
+Pour les site où le nombre d'individu est inférieur à 20, on prend le dmax calculé sur les arbres de tous les sites
+
+Une colonne Dmax95 est ajoutée aux tableaux, esp_site et mesures.
+
+Remarque : on peut noter que,  par exemple pour Dicorynia, le dmax varie de manière importante entre sites. Cela peut avoir une importance dans le modèle de croissance. Si on utilise un Dmax "régional"", certains sites n'auront que des individus à un stade ontogénétique "jeune".
+
+```{r dmax, echo=FALSE}
+seuil<-15 # nombre de mesure minimal pour valider le calcul du dmax par site
+
+Dmax_esp<-tabMesuresSelect %>%           
+  group_by(idEsp,codeEsp,idTree) %>%
+  summarise(DmaxTree = max(Diam)) %>%  
+      # on réduit à un ligne par arbre et on garde la circonference max de chaque arbres
+  group_by(idEsp,codeEsp) %>%
+  summarise(nbtree=n(),Dmax95_esp=quantile(DmaxTree,0.95,na.rm=TRUE)) %>%  
+  select(idEsp,Dmax95_esp)  #mise en forme
+
+
+Dmax_esp_site<-tabMesuresSelect %>%           
+  group_by(Forest,idEsp,codeEsp,idTree) %>%
+  summarise(DmaxTree = max(Diam)) %>%  
+      # on réduit à un ligne par arbre et on garde la circonference max de chaque arbres
+  group_by(Forest,idEsp,codeEsp) %>%
+  summarise(nbtree=n(),Dmax95=quantile(DmaxTree,0.95,na.rm=TRUE)) %>%  
+  select(idEsp,codeEsp,Forest,Dmax95,nbtree) %>% #mise en forme
+  arrange(idEsp,Dmax95) %>% 
+  left_join(Dmax_esp,by=c("idEsp")) %>% 
+  mutate(Dmax95 = if_else(nbtree >= seuil, Dmax95, Dmax95_esp)) %>% 
+  select(-Dmax95_esp)
+  
+  
+
+# calcul de l'amplitude des dmax pour chaque espece et ajout des Dmax par site#
+esp_range_dmax<-Dmax_esp_site %>%
+  group_by(idEsp,codeEsp) %>%
+  summarize(Dmax_h=max(Dmax95),Dmax_b=min(Dmax95))
+
+tabMesuresSelect<-tabMesuresSelect %>%
+  left_join(select(Dmax_esp_site,-nbtree), by=c("idEsp","codeEsp","Forest"))
+
+tab_esp_site_logg<-tab_esp_site_logg %>% 
+  left_join(select(Dmax_esp_site,-nbtree), by=c("idEsp","codeEsp","Forest")) %>%
+  rename(Dmax95Forest=Dmax95)
+```
+
+```{r tableaux_dmax, echo=FALSE}
+#knitr::kable(esp_range_dmax, digits= 1,caption="Min et Max de Dmax95 par espèce",align=c('r','c','r','r'))
+#knitr::kable(Dmax_esp_site, digits= 1,caption="Dmax95 par espèces et par site",align=c('r','c','c','r','r'))
+
+```
+
+
+##Construction des tableaux de données
+Les données pour le modèle sont sous forme de tableau de donnees BIANNUELLES i.e. pour le modèle de croissance une observation est un accroissement entre deux dates d'inventaire, pour le modèle de mortalité une observatiosn est un etat vivant ou mort une année n et les diamètres de l'année n-1 et n-2
+
+
+
+```{r 2ans_data, echo=TRUE}
+
+## Construction donnees pour modele d'accroissement
+
+datacr_sc<-tabMesuresSelect%>%
+ # slice(1:20)%>%
+  arrange(idTree,CensusYear)%>%     # on trie par arbre et annee
+  select(idTree,idEsp,codeEsp,Diam,CodeAlive,CensusYear,CensusDate,Dmax95,Forest,Plot,idTraitement)%>%    # choix de quelques colonnes
+  mutate(Diam2=lead(Diam),CodeAlive2=lead(CodeAlive),idTree2=lead(idTree),Year2=lead(CensusYear),CDate2=lead(CensusDate))%>% # decalage des donnes diametre et annee
+  filter(idTree==idTree2)%>%  # on ne garde que les ligne qui concerne le meme individu
+  filter(CodeAlive2==TRUE & CodeAlive==TRUE)%>% # on ne garde que  les ligne avec "mesure" sur arbre vivants
+  select(idTree,idEsp,codeEsp,Diam1=Diam,Diam2,Year1=CensusYear,Year2,CDate1=CensusDate,CDate2,Dmax95,Forest,Plot,idLogg=idTraitement)%>% # mise en forme
+  mutate(AGR=(Diam2-Diam1)/(Year2-Year1)) %>%  # calcul des acroissements
+  filter(AGR>=0) %>% # on suprimme les accroisssements negatifs
+  arrange(idTree,Year1)     # on trie par arbre et annee
+  
+
+## Construction fichier pour modele mortalite
+
+datamo_sc<-tabMesuresSelect%>%
+  arrange(idTree,CensusYear)%>%   # on trie par arbre et annee
+  select(idTree,idEsp,Diam,CodeAlive,CensusYear,CensusDate,Dmax95,Forest,Plot,idTraitement)%>%  # choix de quelques colonnes
+    # decalage vers le haut des colonnes diametre (-1), codeAlive (-2), pour creer des champs pour l'acroissement et le champs vivant/mort
+  mutate(Diam2=lead(Diam),CodeAlive3=lead(CodeAlive,2),idTree3=lead(idTree,2),Year2=lead(CensusYear),Year3=lead(CensusYear,2),CDate2=lead(CensusDate),CDate3=lead(CensusDate,2))%>% 
+  filter(idTree==idTree3)%>%    # on enleve les lignes qui avec des donnees de deux individus differents
+  select(idTree,idEsp,Diam1=Diam,Diam2,CodeAlive3,Year1=CensusYear,Year2,Year3,CDate1=CensusDate,CDate2,CDate3,Dmax95,Forest,Plot,idLogg=idTraitement)%>% # quelques nouveaux titres de colonne"
+    # le diametre d'interet pour le modele demortalite est en n-1 avant l'evenement de mort ou de survie, creation to_death ( 1 = deces, 0= survie)
+  mutate(AGR=(Diam2-Diam1)/(Year2-Year1),rdiam=Diam2/Dmax95,to_Death=if_else(CodeAlive3,0,1)) %>% 
+  filter(AGR>=0) %>% # on suprimme les accroisssements negatifs
+  arrange(idTree,Year1)   # on trie par arbre et annee
+
+
+#controle : Water0 doit être vide
+Water0<-datamo_sc %>% 
+  mutate(duree=Year3-Year1) %>% 
+  filter(duree<=0)
+
+
+```
+
+
+#2 Création de l'indice de climat : stress hydrique
+## Démarche générale sur l'utilisation des données climat (pluviométrie) 
+A partir de donnée pluviométrie et de données sur des caractéristiques physiques du sol et de son fonctionnement hydrique, il est possible de calculé un indice journalier de disponibilité en eau du sol pour les arbres : le REW (Relative Extractable Water, cit. Wargner et al 2011). Un REW de 1 correspond à une disponibilité maximale, une valeur de 0 à un absence totale de disponibilité en eau. En dessous d'un REW de 0.4 on considère que les arbres souffrent de stress hydrique.
+
+Il est alors possible de construire un indice de stress hydrique sur des durées supra-journalière (semaine, mois, années) en sommant, uniquement pour les journées avec un REW inférieur à 0.4, les écart entre le REW observé et le seuil de 0.4. Sur un graphique montrant l'évolution journalière du REW, cet indice correspond à l'aire "vide" sous la droite REW=0.4 (cf graphe ci-dessous) (cit Aubry-Kientz et al 2015)
+
+Pour cette étude nous avons à notre disposition des données sols pour le site de Paracou et des données pluviométriques pour la pluspart des sites Guyafor. Nous allons donc construire de REW journalier pour chaque site Guyafor avec sa pluviométrie, mais en conservant les données sol de Paracou.
+
+Seules les donnéee REW pour le dispositifs de Paracou sont disponible
+
+La construction de la covariable climat se fait en deux étapes
+
+1. calcul d'un indice de stress interinventaire par site et par parcelle. La date d'inventaire, au mois prés,est prise en compte dans les paramètres.
+
+2. pour chaque ligne de donnée (accroissement ou évènement de survie/mortalité), calcul et ajout de la covariable climat qui depend de la date initiale, de la date finale et du site.
+
+
+## Calcul Indice Stress hydrique inter-inventaire (au mois près)
+Paramètres :
+
+1. le seuil pour le calcul de l'indice journalier des tress hydrique (WS)
+
+2. le fichier de donnée de circonférence issu de l'étape 1
+
+```{r climat, echo=TRUE}
+
+# paramètres
+seuilREW<-0.4  # seuil pour calcul indice Water
+fich_clim_forest<-"Paracou_clim.Rdata"
+
+
+# chargement des donnée REW par jour et par site (donnees journalières de REW avec date en trois colonnes : year, month, day)
+# test sur Paracou
+REWdata<-read.csv2("Donnees_climat/REW_1978-2017_Fabien.csv",sep=",",dec=".")
+ISHdata<-REWdata %>% 
+  mutate(Forest="Paracou") %>% 
+  mutate(Ish=if_else(seuilREW-REW>=0,seuilREW-REW,0)) %>% 
+  group_by(Forest,year,month) %>% 
+  summarise(Ishm=sum(Ish)) %>% 
+  ungroup() %>% 
+  mutate(CDymIsh=paste(year,"-",month,"-15",sep="")) %>% 
+  transmute(Forest=Forest, Ishm=Ishm, CDymIsh=as.Date(CDymIsh,"%Y-%m-%d"))
+
+
+
+# tableau des sites et couples d'inventaire à partir des mesures sélectionnées
+ForestInvIsh<-datacr_sc %>% 
+  select(Forest,CDate1,CDate2) %>% 
+  distinct() %>% 
+  transmute(Forest=Forest,CDate1=as.Date(CDate1,"%Y-%m-%d"),CDate2=as.Date(CDate2,"%Y-%m-%d")) %>% # Passe les Cdate en format date
+  mutate(CDym1=paste(format(CDate1,format = "%Y"),"-",format(CDate1,format =  "%m"),sep="")) %>%  
+  mutate(CDym2=paste(format(CDate2,format="%Y"),"-",format(CDate2,format = "%m"),sep="")) %>% # selectionne seulement les mois et année pour diminuer les nombres d'inventaires
+  select(Forest,CDym1,CDym2) %>% 
+  distinct() %>% 
+  transmute(Forest=Forest,CDym1=as.Date(paste(CDym1,"-15",sep=""),"%Y-%m-%d"),CDym2=as.Date(paste(CDym2,"-15",sep=""),"%Y-%m-%d")) %>% # Passe les Cdate en format date, on ajoute un nombre pour le jour sinon as.Date renvoi NA
+  mutate(IshInv=NA) # on crée une colonne vide pour l'indice de stress hydrique
+
+
+# test sur Paracou
+ParacouInvIsh<-ForestInvIsh %>% filter(Forest=="Paracou") #%>% 
+# mutate(ISHmy=ISH(CDym1,CDym2,Forest,dataREW))
+
+# fonction de calcul de l'indice de stess hydrique, paramètre date début, date fin et donnees journalières de REW 
+ISH<-function (date1, date2,Fplot, ISH_data) # ISHdata contient le calcul des ISH mensuel, la date du mois  et l'identifiants Forest
+{
+  sortie<-ISH_data %>% 
+    filter(Forest==Fplot & (CDymIsh >= date1) & (CDymIsh < date2))  
+    sum(sortie$Ishm)
+    }
+
+# boucle de calcul de l'indice pour chaque ligne foret_couple_inventaire
+#temps_depart <-Sys.time()
+i<-1
+for(i in 1:nrow(ParacouInvIsh)) {
+ # ISH(ParacouInvIsh$CDym1[i],ParacouInvIsh$CDym2[i],ParacouInvIsh$Forest[i],ISHdata)
+  Fplot<-ParacouInvIsh$Forest[i]
+  date1<-ParacouInvIsh$CDym1[i]
+  date2<-ParacouInvIsh$CDym2[i]
+  sortie<-ISHdata %>% filter(Forest==Fplot & (CDymIsh >= date1) & (CDymIsh < date2))  
+  ParacouInvIsh$IshInv[i]<-sum(sortie$Ishm)
+  }
+#Sys.time()-temps_depart
+
+#  mutate(index_mort=sapply(mort, function(x) which(Dates_inv_temp==x))) 
+```
+
+
+## Ajout des varaibles climat au tableaux de données
+
+```{r climat_index_ajout, echo=TRUE}
+datacr_cl<-datacr_sc %>%
+  mutate(CDym1=as.Date(CDate1,"%Y-%m-%d"),CDym2=as.Date(CDate2,"%Y-%m-%d")) %>% 
+  # Passe les Cdate en format date
+  mutate(Datetemp1=paste(format(CDym1,format = "%Y"),"-",format(CDym1,format =  "%m"),sep="")) %>%  
+  mutate(Datetemp2=paste(format(CDym2,format="%Y"),"-",format(CDym2,format = "%m"),sep="")) %>% 
+  mutate(CDym1=as.Date(paste(Datetemp1,"-15",sep=""),"%Y-%m-%d"),CDym2=as.Date(paste(Datetemp2,"-15",sep=""),"%Y-%m-%d")) %>% 
+  # on ajoute un nombre pour le jour sinon as.Date renvoi NA
+  select(-Datetemp1,-Datetemp2) %>% 
+  left_join(ParacouInvIsh,by=c("Forest","CDym1","CDym2"))
+
+datamo_cl_tmp<-datamo_sc %>%
+  mutate(CDym1=as.Date(CDate1,"%Y-%m-%d"),CDym2=as.Date(CDate2,"%Y-%m-%d"),CDym3=as.Date(CDate3,"%Y-%m-%d")) %>% # Passe les Cdate en format date
+  mutate(Datetemp1=paste(format(CDym1,format = "%Y"),"-",format(CDym1,format =  "%m"),sep="")) %>%  
+  mutate(Datetemp2=paste(format(CDym2,format="%Y"),"-",format(CDym2,format = "%m"),sep="")) %>% 
+  mutate(Datetemp3=paste(format(CDym3,format="%Y"),"-",format(CDym3,format = "%m"),sep="")) %>% 
+  mutate(CDym1=as.Date(paste(Datetemp1,"-15",sep=""),"%Y-%m-%d"),CDym2=as.Date(paste(Datetemp2,"-15",sep=""),"%Y-%m-%d"),CDym3=as.Date(paste(Datetemp3,"-15",sep=""),"%Y-%m-%d")) %>% # on ajoute un nombre pour le jour sinon as.Date renvoi NA
+  select(-Datetemp1,-Datetemp2,-Datetemp3) %>% 
+  left_join(ParacouInvIsh,by=c("Forest","CDym1","CDym2")) %>% 
+  rename(IshInvVig=IshInv) 
+
+ParacouInvIsh_mo<-ParacouInvIsh %>% 
+  rename(CDym3=CDym2) %>% 
+  rename(CDym2=CDym1) 
+
+datamo_cl<- datamo_cl_tmp %>% 
+  left_join(ParacouInvIsh_mo,by=c("Forest","CDym2","CDym3")) %>% 
+  rename(IshInvMo=IshInv) 
+   
+save(datacr_cl,datamo_cl,file=fich_clim_forest) # le 17/05/2019
+
+#######################"" 
+    
+
+
+
+
+#fich_sauv_clim<-"REW_paracou_78_17.Rdata" # fichier de sortie
+#seuilREW<-0.4  # seuil pour calcul indice Water
+#jour_inv<-273 # n° du jour d'inventaire de l'année 
+
+#Chargement des données REW journalières de Paracou
+# load("REW.1978.2013.Rdata") 
+#REWdata<-read.csv2("Donnees_climat/REW_1978-2017_Fabien.csv",sep=",",dec=".")
+
+# verif coherence annees meteo et donnees arbres
+#sort(unique(tabMesuresSelect$CensusYear))
+#sort(unique(REWdata$year)) # attention min(annee_climate) doit être égale à min(annee_inventaire) - 1
+#temp<-tabMesuresSelect %>% filter(CensusYear==1978) # nb donnees perdues car annee 1978 sans indice de climat 
+
+# à faire sous forme de fonction entre deux date d'inventaire pour l'adapter aux autres dispositifs
+#Calcul indice annuel Paracou
+#REWyear<-REWdata%>%
+#  mutate(Waterj=seuilREW-REW)%>%   # calcul indice par jour
+#  arrange(day_julian) %>%
+#  mutate(Water=lag(Waterj,jour_inv))%>%  decalage indice journalier en fonction du jour d'inventaire : pour le calcul de l'indice de l'année 1996, on utilise les REW du 2 octobre 1995 au 1er octobre 1996
+#  filter(Water > 0)%>%  #on ne garde que les jours avec un REW inférieur au seuil de 0.4"
+#  group_by(year)%>%
+#  summarise(Water=sum(Water))%>%   # calcul de l'indice annuel
+#  filter(!is.na(Water))#%>%         # suppression année non complete (la premiere des donnees meteo)
+ # mutate(Water_c=(Water-mean(Water)),Forest="Paracou") # on centre la variable climatique
+
+#save(REWyear,file=fich_sauv_clim)
+```
+
+
+
+#3 Calcul des indices de perturbation pour les parcelles exploitées.
+L'indice de perturbation est le pourcentage de biomasse enlevée ou morte, lors l'exploitation, par rapport à la biomasse initiale de la parcelle.
+La valeur initiale est donnée par l'inventaire le plus récent avant exploitation, la valeur post exploitation est donnée par un inventaire quelques année après exploitation afin de prendre en compte l'effet retard de l'exploitation sur la mortalité.
+Ce délai est le paramètre YaLogg (Year after Logging).D'après les résulats de Camila Piponio-Laroche, ce temps de latence est autour de 5 ans.
+la valeurde biomasse post exploitation sera donnée par l'inventaire post-exploitation, le plus proche de : année d'exploitation + YaLogg.
+
+Une fois les année de mesures selectionnées, on fait le calcul sur les mesured corrrespondantes de Guyafor, en utilisant le package BIOMASS
+
+Seuls les dispositifs de Paracou, Montagne Tortue et Manaré, ont de vrais inventaire pré-exploitation. 
+
+Pour les parcelles Organabo et Risquetout le premier inventaire a eu lieu longtemps après l'exploitation. Sur ces parcelles exploitée, la moitiée des parcelles ont été éclaircies et d'autres sont restées en temoins, c'est à ditre exploitées mais pas eclaircies. D'après ONf, la parcelle Risquetout 8 a été très peu exploité (absence totale de souches). Nous tenterons de la prendre comme référence de biomasse pré-exploitation pour les parcelles de Risquetout.
+
+## Par site, choix des années d'inventaire pré et post exploitation quand elles existent
+```{r perturbation_select_year, echo=TRUE}
+# on repart des données Guyafor de base sur les parcelle exploitées et du fichier sur les données dispositifs
+#load("dispoGuyafor2018.Rdata") # contient une table dispoGuyafor
+
+# Parametrage
+YaLogg <- 4.6  # avec décimale <> 0.5 pour éviter le problème de inventaire tout les deux ans ou tout les ans
+
+dataDispoLogg<-read.csv2("foret-Campagne.csv") # extraction de la base Guyafor, contient les effectif de mesures par dates de fin d'inventaire et info sur type et année d'exploitation
+
+# Création d'un tableau du nombre de mesure par Forest/parcelle/date_inventaire
+ForestInv<-dataDispoLogg %>% 
+  select(NomForet, Libelle,Surface,idTraitement,DateExploitation,starts_with("inv")) %>% 
+  gather(starts_with("inv"), key=DateInvt, value=Nbmes) %>% 
+  filter(!is.na(Nbmes)) %>% 
+  arrange(NomForet, Libelle) %>% 
+  mutate(CensusDate=as.Date(substr(DateInvt,4,14),"%d_%m_%Y")) %>% mise au format date de la colonne DateInv
+  mutate(CensusYear=as.numeric(substr(DateInvt,10,14))) %>%    # extraction année d'inventaire
+  select(-DateInvt)
+
+# check les année/parcelle pour lesquelles il y a deux dates d'inventaire : pas mal de parecelle/année à Paracou, 2 à risquetout et deux à Organabo 
+#control<-ForestInv %>% 
+#  group_by(NomForet, Libelle,idTraitement,DateExploitation,CensusYear) %>% 
+#  summarise(nbinv=n()) %>% 
+#  filter(nbinv>1)
+# write.table(control,file="deux_inv_paracou.csv",sep=";")
+
+# cumul des donnée si plusieurs inventaire de la même parcelle la même année : attention P9 paracou annéee à 11000 individus : surement des juvéniles
+ForestInv<-ForestInv %>% 
+  group_by (NomForet,Libelle,Surface,idTraitement,DateExploitation,CensusYear) %>% 
+  summarise (Nbmes=sum(Nbmes))
+
+# Selection des inventaires les plus proches des désirata en pre et post exploitation
+temp_LI<-ForestInv %>%          
+  filter((idTraitement>0) & (!is.na(DateExploitation))) %>% # selection des parcelles avec traitement
+  mutate(temp1=CensusYear-DateExploitation) %>% 
+  mutate(PrePost=if_else(temp1>=0,"post","pre")) %>% 
+  mutate(temp2=if_else(PrePost=="post",temp1-YaLogg,temp1)) %>% # calcul des dif en année entre inventaire et date d'exploitation
+  mutate(temp2=abs(temp2)) %>% 
+  group_by(NomForet,Libelle,PrePost) %>% 
+  mutate(temp3=min(temp2)) %>% 
+  filter(temp3==temp2) %>% 
+  arrange(NomForet,Libelle,desc(PrePost)) %>% 
+  select(-starts_with("temp"))
+
+# verif nb inv pré et post par parcelle 
+control_ni<-temp_LI %>% 
+  group_by(NomForet,Libelle, PrePost) %>% 
+  summarise(nbtest=n())
+ 
+temp_LI_1<-temp_LI %>% 
+  select(-Nbmes) %>% 
+  spread(key=PrePost,value=CensusYear) %>% 
+  rename(Pre_CY=pre,Post_CY=post)
+
+DispoLogg<-temp_LI %>% 
+select(-CensusYear) %>% 
+spread(key=PrePost,value=Nbmes) %>% 
+rename(Pre_nbmes=pre,Post_nbmes=post)  %>% 
+inner_join(temp_LI_1,by=c("NomForet","Libelle","Surface","idTraitement","DateExploitation")) %>% 
+select(NomForet,Libelle,Surface,idTraitement,DateExploitation,Pre_CY,Post_CY,Pre_nbmes,Post_nbmes)%>% 
+mutate(ForestPlot=paste(NomForet, Libelle)) %>%
+filter((!is.na(Pre_CY)&!is.na(Post_CY))|(NomForet %in% c("Organabo","Risquetout")))
+
+```
+```{r tableaux_site_pre_post_logg, echo=FALSE}
+#knitr::kable(DispoLogg, digits= 1,caption="Disositif et année d'inventaire pré et post exploitation",align=c('l','l','c','c','c','c','c','l'))
+
+```
+
+## Calcul de l'indice par parcelle avec inventaire pré-exploitation
+On utlise le Package "BIOMASS". La fonction de calcul de la biomasse, prend en entrée un genre, une espèce, un diamètre et une position en longitude et lattitude.
+
+```{r perturbation_index, echo=TRUE}
+#selection des mesure cibles pre et post exploitation
+index_trait_mes<-dispoGuyafor %>% 
+  select(Forest, Plot,idTree,Genus,Species,CensusYear,CodeAlive,CodeMeas,CircCorr,Lon,Lat) %>% 
+  filter(CodeAlive==TRUE & CircCorr>=31.4) %>% 
+  mutate(ForestPlot=paste(Forest, Plot)) %>% 
+  semi_join(DispoLogg, by="ForestPlot") %>%        # selection des mesures d'individus sur les parcelles correspondantes
+  left_join(DispoLogg,by="ForestPlot") %>%           # import colonne table dispositif dont année pré-et post-exploitation
+  select(-NomForet,-Libelle) %>% 
+  filter((CensusYear==Pre_CY) | (CensusYear==Post_CY)|(Forest %in% c("Organabo","Risquetout"))) %>% 
+  mutate(GS=paste(as.character(Genus),"_",as.character(Species)))
+
+
+# verification des genre et espèce  et import des WD
+liste_esp<-index_trait_mes %>% #creation d'une liste unique d'espèce
+  select(Genus,Species,GS) %>% 
+  distinct()
+
+Taxo=correctTaxo(genus=as.character(liste_esp$Genus), species=as.character(liste_esp$Species)) # correct the species names
+#WDdata=getWoodDensity(genus=Taxo$genusCorrected, species=Taxo$speciesCorrected, stand=Data$Plot) # get WD (mean and sd), l'option stand permet d'attribuer la WD moyenne pour les espèces inconnues, mais demeande de faire le calcule pour chaque arbres (sur table index_trait)
+WDdata=getWoodDensity(genus=Taxo$genusCorrected, species=Taxo$speciesCorrected) #☺ donne WD du genre si espece inconnu ou de l'ensemble des donnees si genre inconnu. Pas de prise en compte de la famille
+liste_esp<-cbind(liste_esp,WDdata)
+
+#import des WD pour chaque mesure et calcul de l'AGB par placette et année
+index_trait<-index_trait_mes %>% 
+  select(-Genus,-Species) %>% 
+  left_join(liste_esp,by="GS") %>% 
+  select(-genus,-species) %>% 
+  mutate(DBH=CircCorr/pi) %>% 
+  mutate(AGB=computeAGB(D=DBH, WD=meanWD, coord = cbind(Lon,Lat))) %>%
+  filter(!is.na(Pre_CY)&!is.na(Post_CY)) %>% 
+  # pour retirer les forêt de Risquetout et Organabo
+  mutate(T_index=if_else((CensusYear==Pre_CY),"PreLogg","PostLogg")) %>%  
+  # pour garder le type d'année
+  group_by(ForestPlot,Surface,CensusYear,T_index) %>% 
+  summarise(AGB_plot=sum(AGB)) %>%  
+  # calcul de la biomasse par dispositif
+  ungroup() %>%                                        
+  # on dégroupe pour pouvoir supprimer l'année d'inventaire qui empecherait de faire le spread
+  select(-CensusYear) %>% 
+  spread(key=T_index, value=AGB_plot) %>%            
+  # on crée des colonnes à partir de T_index et on y place les valeur de SurfTerr
+  filter((!is.na(PreLogg))&(!is.na(PostLogg))) %>%   
+  # on supprime les dispositifs avec une seule date
+  mutate(IndexLogg=PostLogg/PreLogg*100/as.numeric(Surface))                 
+  # calcul de l'indice à l'hectare
+
+```
+
+## Tentative d'ajout indice pour Risquetout et Organabo (non concluant)
+Sur les parcelle de Risquetout exploitation en 1983, premier inventaire en 1999, éclaircie des parcelles en 
+  P05 exploitation 1983, traitée en 1995, inventoriée en 1995
+  P08 exploitation 1983, traitée en 1998, inventoriée en 1999
+  P14 exploitation 1983,traité en 2000, inventoriée en 2001, 2004
+
+Sur les parcelle d'organabo  
+  P06 exploitation en 1986, traité en 1996, premier inventaire 1997
+  P09 exploitation en 1991, traitée en 1998, premier inventaire 1999
+  P10 exploitation en 1991, traité en 2000, premier inventaire 2000
+  
+```{r perturbation_risquetout, echo=FALSE}
+# calcul biomasse parcelle et par année d'inventaire
+
+index_rqt<-dispoGuyafor %>% 
+  filter(CodeAlive==TRUE & CircCorr>=31.4 & (Forest %in% c("Risquetout","Organabo"))) %>% 
+ # filter((Plot=="P08 témoin") | (Plot=="P08 traitée")) %>% 
+  select(Forest, Plot,PlotSurface,idTree,Genus,Species,CensusYear,CodeAlive,CodeMeas,CircCorr,Lon,Lat) %>% 
+  mutate(ForestPlot=paste(Forest, Plot)) %>% 
+  mutate(GS=paste(as.character(Genus),"_",as.character(Species))) %>% 
+  mutate(DBH=CircCorr/pi) %>% 
+  select(-Genus,-Species) %>% 
+  left_join(liste_esp,by="GS") %>% 
+  select(-genus,-species) %>% 
+  mutate(AGB=computeAGB(D=DBH, WD=meanWD, coord = cbind(Lon,Lat))) %>%
+  group_by(ForestPlot,PlotSurface,CensusYear) %>%  
+  summarise(AGB_plot_year=sum(AGB)) %>%  # calcul de la biomasse par parcelle et année
+  mutate(AGB_ha=AGB_plot_year/PlotSurface) %>% 
+  select(-AGB_plot_year) %>% 
+  spread(key=CensusYear, value=AGB_ha) # on crée des colonnes à partir de CensusYear et on y place les valeur de Biomasse
+
+
+#knitr::kable(index_rqt, caption="BIommase Risquetout et Organabo")
+
+
+  
+#test<-index_rqt %>% 
+#  select(is.na(AGB))
+
+```
+Conclusion les AGB sur risquetout et organabo sont super variable dans le temps y compris sur les parcelles témoins et sur la parcelle 8 qui est la moins "exploitée". Leur utilisation dans le modèle est donc très délicate
+
+## Ajout indice traitement aux tableaux de données croissance et mortalité
+  
+```{r perturbation_index_ajout, echo=TRUE}
+ # données pour le modèle de croissance
+datacr_cl_lo<-datacr_cl %>% 
+  mutate(ForestPlot=paste(Forest, Plot)) %>% 
+  left_join(index_trait,by="ForestPlot") %>% 
+  mutate(TxLogg=if_else(is.na(IndexLogg),1,IndexLogg))
+  
+  
+ 
+# données pour le modèlede mortalité
+datamo_cl_lo<-datamo_cl %>% 
+  mutate(ForestPlot=paste(Forest, Plot)) %>% 
+  left_join(index_trait,by="ForestPlot") %>% 
+  mutate(TxLogg=if_else(is.na(IndexLogg),1,IndexLogg))
+
+```
+
+#4 Sauvegarde des tableaux de données
+
+```{r sortie,echo=TRUE}
+save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
+     nbmin_mes,               # nombre minimal de mesures par arbres
+     an_min_meteo,            # donnee meteo les plus anciennes
+     tabMesuresSelect,        # table de données
+     tab_arbres_select,       # Id et statu des arbres sélectionnés
+     tab_esp,                 # effectif de d'arbre et de mesure par esp et par traitement 
+     tab_esp_site_logg,       # effectif d'arbres et mesure par esp, par site et par traitement
+     tab_site_logg,           # effectif d'arbres et mesures par site, par traitement et par espèce
+     esp_range_dmax,          # Min et max des dmax95 par espèce
+     Dmax_esp_site,           # dmax par espèce et par site
+     cc_espGFClim,            # correspondance espèce et code-espèce
+     ParacouInvIsh,           # valeur indice stress hydrique par forest et par int. d'inventaire
+     index_trait,              # valeur indice exploitation par site
+     datacr_cl_lo,            # données pour le modèle de croissance
+     datamo_cl_lo,            # données pour le modèlede mortalité
+     file=fich_sauv_circ) #"Data16esp_s0_to_join.Rdata") #"S0" pour seuil à 0 pour le nb minimal d'arbres par esp et par site
+```
