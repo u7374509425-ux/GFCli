@@ -13,6 +13,9 @@ data {                        // Data block
   int numt_mo[Nmo];      // numero d'arbre dans la liste des arbres pour modele mortalite
   int <lower=0> Nt;      // longueur liste des arbres
 }
+
+
+
 parameters {
   real <lower=0.01> Gmax;  // Parameter croissance
   real <lower=0> Ks;       // Parameter croissance
@@ -61,6 +64,8 @@ model {                            // Model block
   for(nt in 1:Nt){                // priors
     Gt[nt]~normal(0,sigGt);
   }
+  
+  test
 
  for(n1 in 1:N1)
    log(Acc1[n1]+1)~normal(lcr_mu1[n1],sigma);       // likelihood
