@@ -324,7 +324,7 @@ Water0<-datamo_sc %>%
 ```
 
 
-#2 Création de l'indice de climat : stress hydrique
+#2 Création de l'indice de climat : stress hydrique ( afaire : pb decertain inventaire on a NA dans climmo. Ils sont pas représentés dans climvig)
 ## Démarche générale sur l'utilisation des données climat (pluviométrie) 
 A partir de donnée pluviométrie et de données sur des caractéristiques physiques du sol et de son fonctionnement hydrique, il est possible de calculé un indice journalier de disponibilité en eau du sol pour les arbres : le REW (Relative Extractable Water, cit. Wargner et al 2011). Un REW de 1 correspond à une disponibilité maximale, une valeur de 0 à un absence totale de disponibilité en eau. En dessous d'un REW de 0.4 on considère que les arbres souffrent de stress hydrique.
 
@@ -357,7 +357,7 @@ fich_clim_forest<-"Paracou_clim.Rdata"
 
 # chargement des donnée REW par jour et par site (donnees journalières de REW avec date en trois colonnes : year, month, day)
 # test sur Paracou
-REWdata<-read.csv2("Donnees_climat/REW_1978-2017_Fabien.csv",sep=",",dec=".")
+REWdata<-read.csv2("REW_1978-2017_Fabien.csv",sep=",",dec=".")
 ISHdata<-REWdata %>% 
   mutate(Forest="Paracou") %>% 
   mutate(Ish=if_else(seuilREW-REW>=0,seuilREW-REW,0)) %>% 
@@ -523,7 +523,7 @@ ForestInv<-dataDispoLogg %>%
   gather(starts_with("inv"), key=DateInvt, value=Nbmes) %>% 
   filter(!is.na(Nbmes)) %>% 
   arrange(NomForet, Libelle) %>% 
-  mutate(CensusDate=as.Date(substr(DateInvt,4,14),"%d_%m_%Y")) %>% mise au format date de la colonne DateInv
+  mutate(CensusDate=as.Date(substr(DateInvt,4,14),"%d_%m_%Y")) %>% #mise au format date de la colonne DateInv
   mutate(CensusYear=as.numeric(substr(DateInvt,10,14))) %>%    # extraction année d'inventaire
   select(-DateInvt)
 
@@ -596,7 +596,8 @@ index_trait_mes<-dispoGuyafor %>%
 # verification des genre et espèce  et import des WD
 liste_esp<-index_trait_mes %>% #creation d'une liste unique d'espèce
   select(Genus,Species,GS) %>% 
-  distinct()
+  distinct() %>% 
+  mutate(idEsp=paste(as.character(Genus),as.character(Species))) # attention insere un espace entre les deux champs
 
 Taxo=correctTaxo(genus=as.character(liste_esp$Genus), species=as.character(liste_esp$Species)) # correct the species names
 #WDdata=getWoodDensity(genus=Taxo$genusCorrected, species=Taxo$speciesCorrected, stand=Data$Plot) # get WD (mean and sd), l'option stand permet d'attribuer la WD moyenne pour les espèces inconnues, mais demeande de faire le calcule pour chaque arbres (sur table index_trait)
@@ -669,26 +670,35 @@ index_rqt<-dispoGuyafor %>%
 #  select(is.na(AGB))
 
 ```
-Conclusion les AGB sur risquetout et organabo sont super variable dans le temps y compris sur les parcelles témoins et sur la parcelle 8 qui est la moins "exploitée". Leur utilisation dans le modèle est donc très délicate
+Conclusion les AGB sur Risquetout et Organabo sont super variables dans le temps y compris sur les parcelles témoins et sur la parcelle 8 qui est la moins "exploitée". Leur utilisation dans le modèle est donc très délicate
 
-## Ajout indice traitement aux tableaux de données croissance et mortalité
+## Ajout indice traitement et WD aux tableaux de données croissance et mortalité
   
 ```{r perturbation_index_ajout, echo=TRUE}
+#Ajout WD au tableau des especes
+cc_espGFClim <-cc_espGFClim %>% 
+  left_join(select(liste_esp,idEsp,meanWD),by="idEsp") %>% 
+  rename(WD=meanWD)
+
+  
  # données pour le modèle de croissance
 datacr_cl_lo<-datacr_cl %>% 
   mutate(ForestPlot=paste(Forest, Plot)) %>% 
-  left_join(index_trait,by="ForestPlot") %>% 
-  mutate(TxLogg=if_else(is.na(IndexLogg),1,IndexLogg))
+  left_join(index_trait,by="ForestPlot") %>%  # ajout des indices traitement
+  mutate(TxLogg=if_else(is.na(IndexLogg),1,IndexLogg)) %>% 
+  left_join(select(cc_espGFClim,idEsp,WD),by="idEsp") # ajout des WD
   
   
- 
 # données pour le modèlede mortalité
 datamo_cl_lo<-datamo_cl %>% 
   mutate(ForestPlot=paste(Forest, Plot)) %>% 
-  left_join(index_trait,by="ForestPlot") %>% 
-  mutate(TxLogg=if_else(is.na(IndexLogg),1,IndexLogg))
+  left_join(index_trait,by="ForestPlot") %>%    # ajout des indices traitement
+  mutate(TxLogg=if_else(is.na(IndexLogg),1,IndexLogg)) %>% 
+  left_join(select(cc_espGFClim,idEsp,WD),by="idEsp") # ajout des WD
+
 
 ```
+
 
 #4 Sauvegarde des tableaux de données
 
@@ -709,4 +719,17 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
      datacr_cl_lo,            # données pour le modèle de croissance
      datamo_cl_lo,            # données pour le modèlede mortalité
      file=fich_sauv_circ) #"Data16esp_s0_to_join.Rdata") #"S0" pour seuil à 0 pour le nb minimal d'arbres par esp et par site
+
+temp<-datamo_cl_lo %>% 
+  filter(is.na(IshInvMo)) %>% 
+  filter(Forest=="Paracou") %>% 
+  group_by(Forest,CDate2,CDate3,CDym2,CDym3) %>% 
+  summarise()
+temp2<-datamo_cl_lo %>% 
+  filter(Forest=="Paracou") %>% 
+  group_by(Forest,CDym1,CDym2,IshInvVig) %>% 
+  summarise() %>% 
+  rename(CDym2=CDym1,CDym3=CDym2) %>% 
+  semi_join(temp,by=c("CDym2","CDym3"))
+save(temp,file="pb_clim_paracou _plot.RData")
 ```
