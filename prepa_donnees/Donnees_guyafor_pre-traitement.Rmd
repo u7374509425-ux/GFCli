@@ -386,32 +386,10 @@ ForestInvIsh<-datacr_sc %>%
 ParacouInvIsh<-ForestInvIsh %>% filter(Forest=="Paracou") #%>% 
 # mutate(ISHmy=ISH(CDym1,CDym2,Forest,dataREW))
 
-# fonction de calcul de l'indice de stess hydrique, paramètre date début, date fin et donnees journalières de REW 
-ISH<-function (date1, date2,Fplot, ISH_data) # ISHdata contient le calcul des ISH mensuel, la date du mois  et l'identifiants Forest
-{
-  sortie<-ISH_data %>% 
-    filter(Forest==Fplot & (CDymIsh >= date1) & (CDymIsh < date2))  
-    sum(sortie$Ishm)
-    }
-
-# Autre methode dplyr problème car si Y1 et Y2 sont des vecteur, car les vecteur logique ndoivent avoir la dimension de REWyearForest$year 
-#Year1<-data15_1$Year1
-#Year2<-data15_1$Year2
-#Precipitation <- function(Y1 , Y2, For) { # Y1 et Y2 sont des entier
-#  ApresDebut <- (REWyearForest$year > Y1 & REWyearForest$Forest==For)# Vecteur logique
-#  AvantFin <- (REWyearForest$year <= Y2 & REWyearForest$Forest==For)# Vecteur logique
-#  return(sapply(seq_along(Year1), function(i) sum(REWyearForest$Water_c[ (ApresDebut & AvantFin)[i] ])))
- 
-   # Pour chaque paire de Year1/Year2, on fait la somme, et on stocke le tout dans un vecteur de même taille que  Year1 et Year2
-#}
-
-#data15_2<-data15_1%>%
-#  mutate(Water_2= Precipitation(Year1, Year2))
-
 
 # boucle de calcul de l'indice pour chaque ligne foret_couple_inventaire
 #temps_depart <-Sys.time()
-i<-1
+#i<-1
 for(i in 1:nrow(ParacouInvIsh)) {
  # ISH(ParacouInvIsh$CDym1[i],ParacouInvIsh$CDym2[i],ParacouInvIsh$Forest[i],ISHdata)
   Fplot<-ParacouInvIsh$Forest[i]
@@ -422,6 +400,10 @@ for(i in 1:nrow(ParacouInvIsh)) {
   }
 #Sys.time()-temps_depart
 
+bug<-datamo_cl_lo %>% 
+  filter(Forest=="Paracou" & is.na(IshInvMo))
+
+save(bug, file="pb_na_IshInvMo.RData")
 
 ```
 
@@ -719,7 +701,11 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
      datacr_cl_lo,            # données pour le modèle de croissance
      datamo_cl_lo,            # données pour le modèlede mortalité
      file=fich_sauv_circ) #"Data16esp_s0_to_join.Rdata") #"S0" pour seuil à 0 pour le nb minimal d'arbres par esp et par site
+```
 
+
+```{r debug_data,echo=false}
+#5 Debugages
 temp<-datamo_cl_lo %>% 
   filter(is.na(IshInvMo)) %>% 
   filter(Forest=="Paracou") %>% 
