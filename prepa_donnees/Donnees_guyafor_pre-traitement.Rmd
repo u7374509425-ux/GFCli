@@ -370,8 +370,15 @@ ISHdata<-REWdata %>%
 
 
 # tableau des sites et couples d'inventaire à partir des mesures sélectionnées
-ForestInvIsh<-datacr_sc %>% 
+tempmo<-datamo_sc %>%  #  extraction des couples de date d'inventaire des donnee de mortalite
+  select(Forest,CDate2,CDate3) %>% 
+  rename(Forest=Forest,CDate1=CDate2,CDate2=CDate3) %>% 
+  bind_rows(select(datamo_sc,Forest,CDate1,CDate2))
+  
+
+ForestInvIsh<-datacr_sc %>%  # assemblage avec les couples d'inventaires des donnees de croissance et suppression des doublons
   select(Forest,CDate1,CDate2) %>% 
+  bind_rows(tempmo) %>% 
   distinct() %>% 
   transmute(Forest=Forest,CDate1=as.Date(CDate1,"%Y-%m-%d"),CDate2=as.Date(CDate2,"%Y-%m-%d")) %>% # Passe les Cdate en format date
   mutate(CDym1=paste(format(CDate1,format = "%Y"),"-",format(CDate1,format =  "%m"),sep="")) %>%  
@@ -400,15 +407,11 @@ for(i in 1:nrow(ParacouInvIsh)) {
   }
 #Sys.time()-temps_depart
 
-bug<-datamo_cl_lo %>% 
-  filter(Forest=="Paracou" & is.na(IshInvMo))
-
-save(bug, file="pb_na_IshInvMo.RData")
 
 ```
 
 
-## Ajout des varaibles climat au tableaux de données
+## Ajout des variables climat au tableaux de données
 
 ```{r climat_index_ajout, echo=TRUE}
 datacr_cl<-datacr_sc %>%
@@ -438,41 +441,11 @@ ParacouInvIsh_mo<-ParacouInvIsh %>%
 datamo_cl<- datamo_cl_tmp %>% 
   left_join(ParacouInvIsh_mo,by=c("Forest","CDym2","CDym3")) %>% 
   rename(IshInvMo=IshInv) 
-   
-save(datacr_cl,datamo_cl,file=fich_clim_forest) # le 17/05/2019
 
-#######################"" 
-    
+  
+save(datacr_cl,datamo_cl,file=fich_clim_forest) # le 31/05/2019
 
 
-
-
-#fich_sauv_clim<-"REW_paracou_78_17.Rdata" # fichier de sortie
-#seuilREW<-0.4  # seuil pour calcul indice Water
-#jour_inv<-273 # n° du jour d'inventaire de l'année 
-
-#Chargement des données REW journalières de Paracou
-# load("REW.1978.2013.Rdata") 
-#REWdata<-read.csv2("Donnees_climat/REW_1978-2017_Fabien.csv",sep=",",dec=".")
-
-# verif coherence annees meteo et donnees arbres
-#sort(unique(tabMesuresSelect$CensusYear))
-#sort(unique(REWdata$year)) # attention min(annee_climate) doit être égale à min(annee_inventaire) - 1
-#temp<-tabMesuresSelect %>% filter(CensusYear==1978) # nb donnees perdues car annee 1978 sans indice de climat 
-
-# à faire sous forme de fonction entre deux date d'inventaire pour l'adapter aux autres dispositifs
-#Calcul indice annuel Paracou
-#REWyear<-REWdata%>%
-#  mutate(Waterj=seuilREW-REW)%>%   # calcul indice par jour
-#  arrange(day_julian) %>%
-#  mutate(Water=lag(Waterj,jour_inv))%>%  decalage indice journalier en fonction du jour d'inventaire : pour le calcul de l'indice de l'année 1996, on utilise les REW du 2 octobre 1995 au 1er octobre 1996
-#  filter(Water > 0)%>%  #on ne garde que les jours avec un REW inférieur au seuil de 0.4"
-#  group_by(year)%>%
-#  summarise(Water=sum(Water))%>%   # calcul de l'indice annuel
-#  filter(!is.na(Water))#%>%         # suppression année non complete (la premiere des donnees meteo)
- # mutate(Water_c=(Water-mean(Water)),Forest="Paracou") # on centre la variable climatique
-
-#save(REWyear,file=fich_sauv_clim)
 ```
 
 
@@ -623,6 +596,8 @@ Sur les parcelle d'organabo
   P09 exploitation en 1991, traitée en 1998, premier inventaire 1999
   P10 exploitation en 1991, traité en 2000, premier inventaire 2000
   
+La P8 de Risquetout est connue por avoir très peu de souche et donc ne pas avoir été trop impactée par la première exploitation.
+  
 ```{r perturbation_risquetout, echo=FALSE}
 # calcul biomasse parcelle et par année d'inventaire
 
@@ -637,19 +612,19 @@ index_rqt<-dispoGuyafor %>%
   left_join(liste_esp,by="GS") %>% 
   select(-genus,-species) %>% 
   mutate(AGB=computeAGB(D=DBH, WD=meanWD, coord = cbind(Lon,Lat))) %>%
-  group_by(ForestPlot,PlotSurface,CensusYear) %>%  
+  group_by(Forest,ForestPlot,PlotSurface,CensusYear) %>%  
   summarise(AGB_plot_year=sum(AGB)) %>%  # calcul de la biomasse par parcelle et année
   mutate(AGB_ha=AGB_plot_year/PlotSurface) %>% 
   select(-AGB_plot_year) %>% 
   spread(key=CensusYear, value=AGB_ha) # on crée des colonnes à partir de CensusYear et on y place les valeur de Biomasse
 
-
-#knitr::kable(index_rqt, caption="BIommase Risquetout et Organabo")
-
-
+table_rqt<-index_rqt %>% 
+  filter(Forest=="Risquetout") %>% 
+  select(-"2000",-"2007",-"2013") %>% 
+  select(-PlotSurface)
   
-#test<-index_rqt %>% 
-#  select(is.na(AGB))
+knitr::kable(table_rqt, caption="Biomasse Risquetout")
+
 
 ```
 Conclusion les AGB sur Risquetout et Organabo sont super variables dans le temps y compris sur les parcelles témoins et sur la parcelle 8 qui est la moins "exploitée". Leur utilisation dans le modèle est donc très délicate
