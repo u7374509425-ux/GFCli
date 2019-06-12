@@ -1,3 +1,9 @@
+// modele join croissance et mortalite
+// effet logg effet climat effet dmax
+// effet alea espece sur Gmax  ( oo, clim et logg) et  le logit (oo,clim et logg)
+// paramètre wood density spécifique sur K 
+// logacc_mu_cr[n1] = (oo_Gmax+cr_Gesp[rgEsp_cr[n1]]+cr_clim*clim_cr[n1]+cr_logg*logg_cr[n1])*exp ((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*Dopt))/(Ks*WD_cr[n1]),2)); // obligation de faire un boucle sinon erreur de la fonction pow()
+
 data {                           // Data block
   int<lower=0> Ncr;               // Sample size pop1 : accroissement observes
   int<lower=0> Nmo;              // Sample size pop evenements de survie ou de mort
@@ -15,9 +21,9 @@ data {                           // Data block
   vector<lower=0> [Nmo] dbh_vig; // covariable diametre n-2 calcul pred accroissement avant un evenement de survie
   vector<lower=0> [Nmo] dbhmax_mo;   // diametre max de l'espèces par foret (une donnée par observation)
   vector<lower=0> [Ncr] dbhmax_cr;   // diametre max de l'espèces par foret (une donnée par observation)
+  vector<lower=0> [Nmo] WD_mo;   // densite bois de l'espèces (une donnée par observation)
+  vector<lower=0> [Ncr] WD_cr;   // densite bois de l'espèces (une donnée par observation)
   int<lower=0,upper=1> morts[Nmo];// vecteur de 0 = evenement de survie et de 1 = evenement de mort
-//  int rgtree_cr [N1];              // numero d'arbre dans la liste des arbres pour modele accroissement
-//  int rgtree_mo[Nmo];            // numero d'arbre dans la liste des arbres pour modele mortalite
   int rgEsp_cr [Ncr];              // rang d'espece dans la liste des especes pour modele accroissement
   int rgEsp_mo [Nmo];           // rang d'espece dans la liste des especes pour modele de mortalite
 }
@@ -27,39 +33,47 @@ data {                           // Data block
 parameters {
   real <lower=0.01> oo_Gmax;  // Parameter croissance : ordonnee a l'origine de Gmax
   real <lower=0> Ks;       // Parameter croissance
-  real <lower=10> Dopt;    // Parameter croissance
+  real <lower=0,upper=1.5> Dopt;    // Parameter croissance, borne à 1.5 fois le dmax de l'espèce pour une site donné
   real  cr_clim;           // Parameter croissance
   real  cr_logg;           // Parameter croissance
+  real  cr_dmax;             
   real  oo_logit;               // Parameter mortalite : ordonnee a l'origine du logit
   real  vig;               // Parameter mortalite
   real <upper=0> onto;      // Parameter mortalite
   real <lower=0> onto_sq;   // Parameter mortalite
-  real mo_clim;             // Parameter mortalite
+  real  mo_clim;             // Parameter mortalite
   real  mo_logg;           // Parameter mortalite
   real <lower=0> sigma;     // variance modèle de mortalite
-//  real <lower=0> sigGt;     // variance effet alea individu sur Gmax 
-//  vector [Nt] Gt;             
   real <lower=0> cr_sigGesp;     // variance effet alea espece sur Gmax
+  real <lower=0> cr_sigClesp;     // variance effet alea espece sur Gmax
+  real <lower=0> cr_sigLoesp;     // variance effet alea espece sur Gmax
   vector [Nesp] cr_Gesp;     //effet aleatoire especes sur Gmax : a declare ici et non dans la partie modele car il entre dans le calcul de transformed parameters
+  vector [Nesp] cr_Clesp;     //effet aleatoire especes croissance sur Clim
+  vector [Nesp] cr_Loesp;     //effet aleatoire especes croisance sur Logg 
   real <lower=0> mo_sigesp;     // variance effet alea espece sur mortalite
+  real <lower=0> mo_sigClesp;     // variance effet alea espece sur mortalite clim
+  real <lower=0> mo_sigLoesp;     // variance effet alea espece sur mortalite logg
   vector [Nesp] mo_esp;     //effet aleatoire especes mortalite : a declare ici et non dans la partie modele car il entre dans le calcul de transformed parameters
+  vector [Nesp] mo_Clesp;     //effet aleatoire especes mortalite sur Clim 
+  vector [Nesp] mo_Loesp;     //effet aleatoire especes mortalite sur Logg
 }
 
 transformed parameters {    // Transformed parameters block
 // modele croissance n-1 n  
   vector [Ncr] logacc_mu_cr;            
-  vector [Nmo] logit_mo;       // nombre reel=logit(proba mort)    
+  vector [Nmo] logit_mo;        // nombre reel=logit(proba mort)    
   vector [Nmo] logacc_mu_mo;          // prediction log(accroisssement) (donnees mortalite) = logacc_pred
   vector [Nmo] vig_mo;           // vigueur = log(acc_obs/acc_pred)
 
 // modele d'acroissement
   for(n1 in 1:Ncr) {
-    logacc_mu_cr[n1] = (oo_Gmax+cr_Gesp[rgEsp_cr[n1]]+cr_clim*clim_cr[n1]+cr_logg*logg_cr[n1])*exp ((-0.5)*pow(log(dbh_cr[n1]/dbhmax_cr[n1]/Dopt)/Ks,2)); // obligation de faire un boucle sinon erreur de la fonction pow()
+    logacc_mu_cr[n1] = (oo_Gmax+cr_Gesp[rgEsp_cr[n1]]+cr_dmax*dbhmax_cr[n1]+(cr_clim+cr_Clesp[rgEsp_cr[n1]])*clim_cr[n1]+(cr_logg+cr_Loesp[rgEsp_cr[n1]])*logg_cr[n1])*exp((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*Dopt))/(Ks*WD_cr[n1]),2));
+// obligation de faire un boucle sinon erreur de la fonction pow()
   }
 
 // modele mortalite : data_survie
   for(n2 in 1:Nmo) {
-    logacc_mu_mo[n2] = (oo_Gmax+cr_Gesp[rgEsp_mo[n2]]+cr_clim*clim_vig[n2]+cr_logg*logg_mo[n2])*exp ((-0.5)*pow(log(dbh_vig[n2]/dbhmax_mo[n2]/Dopt)/Ks,2)); 
+    logacc_mu_mo[n2] = (oo_Gmax+cr_Gesp[rgEsp_mo[n2]]++cr_dmax*dbhmax_mo[n2]+(cr_clim+cr_Clesp[rgEsp_mo[n2]])*clim_vig[n2]+(cr_logg+cr_Loesp[rgEsp_mo[n2]])*logg_mo[n2])*exp((-0.5)*pow(log(dbh_vig[n2]/dbhmax_mo[n2]/Dopt)/(Ks*WD_mo[n2]),2)); 
     vig_mo[n2]=log(Acc_mo[n2]+1)-logacc_mu_mo[n2];                      
     logit_mo[n2]= oo_logit+vig*vig_mo[n2]+onto*dbh_mo[n2]/dbhmax_mo[n2]+onto_sq*pow(dbh_mo[n2]/dbhmax_mo[n2],2)+mo_clim*clim_mo[n2]+mo_logg*logg_mo[n2]+mo_esp[rgEsp_mo[n2]]; // logit(mort reussie) 
   }
@@ -79,11 +93,19 @@ model {                            // Model block
   mo_logg ~ normal(0,100);   // priors
   sigma ~ gamma(10^2,10^2);       // priors
   cr_sigGesp ~ gamma(10^2,10^2);       // priors
+  cr_sigClesp ~ gamma(10^2,10^2);       // priors
+  cr_sigGesp ~ gamma(10^2,10^2);       // priors
   mo_sigesp ~ gamma(10^2,10^2);       // priors
+  mo_sigClesp ~ gamma(10^2,10^2);       // priors
+  mo_sigLoesp ~ gamma(10^2,10^2);       // priors
 
   for(nesp in 1:Nesp){                // priors
     cr_Gesp[nesp]~normal(0,cr_sigGesp);
+    cr_Clesp[nesp]~normal(0,cr_sigClesp);
+    cr_Loesp[nesp]~normal(0,cr_sigLoesp);
     mo_esp[nesp]~normal(0,mo_sigesp);
+    mo_Clesp[nesp]~normal(0,mo_sigClesp);
+    mo_Loesp[nesp]~normal(0,mo_sigLoesp);
   }
 
  for(n1 in 1:Ncr)
