@@ -580,7 +580,7 @@ index_trait<-index_trait_mes %>%
   # on crée des colonnes à partir de T_index et on y place les valeur de SurfTerr
   filter((!is.na(PreLogg))&(!is.na(PostLogg))) %>%   
   # on supprime les dispositifs avec une seule date
-  mutate(IndexLogg=PostLogg/PreLogg*100/as.numeric(Surface))                 
+  mutate(IndexLogg=(1-PostLogg/PreLogg)*100/as.numeric(Surface))                 
   # calcul de l'indice à l'hectare
 
 ```
@@ -675,7 +675,7 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
      index_trait,              # valeur indice exploitation par site
      datacr_cl_lo,            # données pour le modèle de croissance
      datamo_cl_lo,            # données pour le modèlede mortalité
-     file=fich_sauv_circ) #"Data16esp_s0_to_join.Rdata") #"S0" pour seuil à 0 pour le nb minimal d'arbres par esp et par site
+     file=fich_sauv_circ) #"Data16esp_s0_to_join.Rdata") #"S0" pour seuil à 0 pour le nb minimal d'arbres par esp et par site, le 12/06/2019, avec le % de biomasse perdue sur IndexLogg
 ```
 
 
