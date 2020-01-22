@@ -118,6 +118,8 @@ model {                            // Model block
   
 
 }
+
+
 //generated quantities {        // Generated quantities block. 
 //  vector [N1] predacc1 ;      // prediction acroissement
 //  vector [N1] resacc1 ;      // prediction acroissement
