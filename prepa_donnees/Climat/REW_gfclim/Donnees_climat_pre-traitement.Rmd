@@ -1,0 +1,221 @@
+---
+title: "Construction données REW (donnés climat) pour le modèle GFClim WP4"
+author: "StephaneKourou"
+date: "06 janvier 2020"
+output:
+  html_document: default
+    # toc:true
+    # toc_depth:3
+  pdf_document: default
+---
+
+<!-- Options de knitr et de R (librairies, ...) --> 
+
+```{r nettoyage, echo=FALSE, message=FALSE,warnings=FALSE}
+# on commence par faire le menage
+rm(list=ls(all=TRUE))
+gc() # garbage collector
+```
+
+```{r Bibliotheque, echo=FALSE, message=FALSE,warning=FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning=FALSE, tidy=TRUE, tidy.opts=list(blank=FALSE, width.cutoff=40))
+# Installation des packages si necessaire et chargement
+Library <- function(Packages) {
+  InstallAndLoad <- function(Package) {
+    if (!Package %in% installed.packages()[, 1]) {install.packages(Package)}
+    require(Package, character.only = TRUE)
+  }
+  invisible(sapply(Packages, InstallAndLoad))
+}
+
+# Ajouter les packages necessaires ici
+Library(c("knitr","tidyverse","dplyr","BIOMASS","ggplot2"))
+
+# Ajout librarie calcul REW modele Fabien et routine Nino
+# 1 ouvrir projet SWMviaOriginalCode.Rproj
+# 2 "build" le packdge "SWMviaOriginalCode", via onglet "build" (a côté de longlet "environnement" sur Rstudio) : cliquer sur "install and restart R"
+#
+library(SWMviaOriginalCode)
+```
+
+<!-- Debut du document ci-dessous --> 
+ 
+# Résumé
+L'objectif est d'obtenir une tableau d'indice REW ( Relative extractable water) journalier pour chaque dispositif du reseau Guyafor retenu pour GFClim, en utilisant une routine qui reprend le modèle de Fabien Wagner.
+Données en entrée :
+  - le plus simple : donnée pluvio, en jour, mois et année 
+  - bcp plus compliqué : reparamétrage du modèle avec des données d'un "TDR" c'est à dire le suivi du taux d'humidité du sol par des sondes tous les 20 cm entre 0 et 2.60 m de profondeur, suivi sur minimum un an
+  
+dans ce document on travaille uniquement à partir des donnée de pluviométrie, les donnée sol ( de paracou) sont appliquées à tous les sites.
+  
+Le fichier **REW_guyafor_multisite.Rdata** contient le résultat de ce script
+
+# 1 Import des données pluvio et correspondances avec les sites de Guyafor 
+
+## Chargement des données
+ 1. Données journalières de pluviométrie depuis des stations de MétéoFrance et des tours à flux de Paracou et des Nouragues
+
+ 2. Tableau de correspondance entre les sites d'étude et les stations météo. Pour le site "Régina-St Georges", on prends la moyenne des stations de Régina et de Saint-Georges
+ 
+ 3. Quelques caractéristiques sur les données des stations météo
+ 
+ 4. Les données REW de Paracou
+
+## Pré traitement des données : gestions des données manquantes
+Pour chaque date annuelle, calcul de la moyenne des pluies sur les 3 années suivantes et/ou précédentes
+On passe de 2475 données manques (sur 248 617 valeur journalières) à 1593 données manquantes. Ces donnees manquantes restantes, concernent les premières et/ou les dernière années de mesure (cf tableau tab_pluvio_na). Elles sont sans incidence sur les données d'inventaire des dispositifs guyafor.
+
+```{r import_data, echo=FALSE}
+# sites Guyafor et station meteo
+site_station<-read.csv2("site_station.csv")  
+station<-read.csv2("station_meteo_features.csv")
+pluvio_station<-read.csv2("pluvio_stations_region.csv",dec=".")
+REW_paracou<-read.csv2("REW_1978-2017_Fabien.csv",sep=",",dec=".")
+
+
+# traitement des donnée manquantes : pour chaque date annuelle, calcul de la moyenne des pluies sur les 3 années suivantes et précédentes
+# sum(is.na(pluvio_station$pluie))
+
+pluvio_station<-pluvio_station %>% mutate(pluie_na=is.na(pluie))
+
+
+jour_moy<-pluvio_station %>%  
+  arrange(Station,month,day,year) %>% 
+  mutate(year3=lead(year,3),month3=lead(month,3),day3=lead(day,3),pluie3=lead(pluie,3)) %>% 
+  mutate(year2=lead(year,2),month2=lead(month,2),day2=lead(day,2),pluie2=lead(pluie,2)) %>% 
+  mutate(year1=lead(year,1),month1=lead(month,1),day1=lead(day,1),pluie1=lead(pluie,1)) %>% 
+  filter(day==day3 & month==month3) %>% 
+  mutate(yearm3=lag(year,3),monthm3=lag(month,3),daym3=lag(day,3),pluiem3=lag(pluie,3)) %>% 
+  mutate(yearm2=lag(year,2),monthm2=lag(month,2),daym2=lag(day,2),pluiem2=lag(pluie,2)) %>% 
+  mutate(yearm1=lag(year,1),monthm1=lag(month,1),daym1=lag(day,1),pluiem1=lag(pluie,1)) %>% 
+  filter(day==daym3 & month==monthm3) %>% 
+  mutate(pluie_moy=(pluie1+pluie2+pluie3+pluiem1+pluiem2+pluiem3)/6) %>% 
+  select(Station,year,month,day,pluie,pluie_moy,pluiem3,pluiem2,pluiem1,pluie1,pluie2,pluie3) %>% 
+  mutate(pluie_moy=if_else(is.na(pluie),pluie_moy,pluie))
+
+jour_moy_na<-jour_moy %>% filter(is.na(pluie_moy)) 
+
+for(i in 1:length(jour_moy_na$pluie)){
+  jour_moy_na$pluie_moy_omi[i]<-mean(na.omit(c(jour_moy_na$pluie1[i],jour_moy_na$pluie2[i],                                                jour_moy_na$pluie3[i],jour_moy_na$pluiem1[i],
+             jour_moy_na$pluiem2[i],jour_moy_na$pluiem3[i])))
+}
+
+
+jour_moy<-jour_moy %>% 
+  left_join(select(jour_moy_na,Station,year,month,day,pluie_moy_omi),by=c("Station","year","month","day")) %>% 
+  mutate(pluie_moy=if_else(is.na(pluie_moy),pluie_moy_omi,pluie_moy)) %>% 
+  select(Station,year,month,day,pluie_moy)
+
+# sum(is.na(jour_moy$pluie_moy)) # verif absence de "na"
+ 
+pluvio_station<-pluvio_station %>% 
+  left_join(jour_moy,by=c("Station","year","month","day")) %>% 
+  mutate(pluie_moy=if_else(is.na(pluie),pluie_moy,pluie)) %>% 
+  select(Station,year,month,day,pluie,pluie_moy,pluie_na)
+
+pluvio_station_na<-pluvio_station %>% filter(is.na(pluie_moy)) 
+
+tab_pluvio_na<-pluvio_station %>%
+#  mutatedate_na
+  filter(is.na(pluie_moy)) %>% 
+  group_by(Station,year,month) %>% 
+  summarise(nbj=n()) %>% 
+  arrange(Station,year,month) %>% 
+  mutate(demil=if_else(year>=2000,2000,1900)) %>% 
+  group_by(Station,demil) %>% 
+  summarise(miny=min(year),maxy=max(year),nbd=sum(nbj)) %>% 
+  pivot_wider(names_from=demil,values_from=c(miny,maxy,nbd)) %>% 
+  select(Station,ends_with("2000"),ends_with("1900"))
+  
+kable(site_station)
+kable(station)
+kable(tab_pluvio_na)
+```
+
+
+# 2 Calcul des REW journalier pour les stations météo ciblées
+Les REW journaliers sont calculés pour chaque station météo, via la fonction "run_original_SWM()". On construit ensuite un tableau, pour chaque site avec les données journalières correspondant à chaque site de recherche.
+
+Le tableau en entrée de la routine de calcul des REW doit contenir des colonnes "pluie", "year", "month","day",
+
+```{r REW_stations, echo=TRUE}
+stations_cibles<-unique(site_station$Choix_station)
+stations_cibles<-stations_cibles[which(!(stations_cibles %in% c("Paracou")))] # on extrait Paracou pour lequel on a déjà les donees REW
+
+
+REW_stations<-data.frame()
+
+for(i in 1:length(stations_cibles)) {
+  dataREW_st<-pluvio_station %>% 
+    filter(Station==as.character(stations_cibles[i]) & !is.na(pluie_moy)) %>% 
+    select(-pluie) %>% 
+    mutate(pluie=pluie_moy)
+  
+  REWi<-run_original_SWM(dataREW_st)
+  
+  REWi$Station<-c(as.character(stations_cibles[i]))
+  REW_stations<-rbind(REW_stations,REWi)
+}
+
+#ajout donnée Paracou
+REW_paracou$Station<-"Paracou"
+
+REW_Guyafor<-REW_stations %>% 
+  mutate(day_julian=julian_day,precipitation=pluie) %>% 
+  select(Station,day_julian,day,month,year,precipitation,REW) %>% 
+  bind_rows(select(REW_paracou,Station,day_julian,day,month,year,precipitation,REW))
+
+# affectation des données sur les site de guyafor
+site_station<-site_station %>% 
+  arrange(Choix_station)
+
+REW_sites_gfclim<-data.frame()
+
+for(i in 1:length(site_station$Choix_station)) {
+  dataREW_sit<- REW_Guyafor %>% 
+    filter(Station==as.character(site_station$Choix_station[i]))
+  dataREW_sit$Forest<-c(as.character(site_station$Forest[i]))
+  REW_sites_gfclim<-rbind(REW_sites_gfclim,dataREW_sit)
+}
+
+
+```
+
+
+
+
+#3 Sauvegarde des tableaux de données
+
+```{r sortie,echo=TRUE}
+save(station, # plages de dates des donnée par station meteo
+     site_station,# tableau des correspondance entre site Guyafor (Forest) et stations meteo
+     REW_sites_gfclim,# REW par date et par site (Forest)
+     tab_pluvio_na,           # effectif de donnee pluvio manquante par plage de temps et par dispositifs
+     REW_Guyafor,            # données REW sur station météo utile pour Guyafor 
+     file="REW_guyafor_multisite.Rdata") #
+
+# pour export vers Rstudio reseau
+save(station, # plages de dates des donnée par station meteo
+     site_station,# tableau des correspondance entre site Guyafor (Forest) et stations meteo
+     REW_sites_gfclim,# REW par date et par site (Forest)
+     tab_pluvio_na,           # effectif de donnee pluvio manquante par plage de temps et par dispositifs
+     REW_Guyafor,            # données REW sur station météo utile pour Guyafor 
+     file="REW_guyafor_multisite2.Rdata",version=2) 
+```
+
+
+```{r debug_data,echo=FALSE}
+#5 Debugages
+# temp<-datamo_cl_lo %>% 
+#   filter(is.na(IshInvMo)) %>% 
+#   filter(Forest=="Paracou") %>% 
+#   group_by(Forest,CDate2,CDate3,CDym2,CDym3) %>% 
+#   summarise()
+# temp2<-datamo_cl_lo %>% 
+#   filter(Forest=="Paracou") %>% 
+#   group_by(Forest,CDym1,CDym2,IshInvVig) %>% 
+#   summarise() %>% 
+#   rename(CDym2=CDym1,CDym3=CDym2) %>% 
+#   semi_join(temp,by=c("CDym2","CDym3"))
+# save(temp,file="pb_clim_paracou _plot.RData")
+```
