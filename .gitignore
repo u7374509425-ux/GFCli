@@ -10,6 +10,11 @@ join_model_16sp_ to4.R
 # Session Data files, utiliser ".rda" pour monter des fichier de donnees, tableau de recap par exemple.
 *.Rdata # perso
 *.RData  # par defaut
+*.rdata # perso
+
+# repezrtoire annexes
+/Archives/*
+/stan_sorties/*
 
 # projet Rstudio
 *.Rproj
