@@ -11,10 +11,37 @@ join_model_16sp_ to4.R
 *.Rdata # perso
 *.RData  # par defaut
 *.rdata # perso
+*.csv
+*.txt
 
-# repezrtoire annexes
+*.jpg
+*.tex
+*.log
+
+*.docx
+
+/prepa_donnees/*.Rdata
+/prepa_donnees/*.rdata
+/prepa_donnees/*.RData
+/prepa_donnees/*.csv
+/prepa_donnees/Climat/REW_gfclim/*.Rdata
+/prepa_donnees/Climat/REW_gfclim/*.rdata
+/prepa_donnees/Climat/REW_gfclim/*.RData
+/prepa_donnees/Climat/REW_gfclim/*.csv
+
+# repertoires annexes
 /Archives/*
 /stan_sorties/*
+/prepa_donnees/debug/*
+/prepa_donnees/Logging/*
+/prepa_donnees/Climat/Biljou/*
+/prepa_donnees/Climat/Meteo Guyaflux/*
+/prepa_donnees/Climat/Vincent_F/*
+/prepa_donnees/Climat/REW_gfclim/donnes_clim/*
+/prepa_donnees/Climat/REW_gfclim/SWMviaOriginalCode/*
+/prepa_donnees/Climat/REW_gfclim/Donnees_climat_pre-traitement_cache/*
+
+#/prepa_donnees/Climat/REW_gfclim/*
 
 # projet Rstudio
 *.Rproj
