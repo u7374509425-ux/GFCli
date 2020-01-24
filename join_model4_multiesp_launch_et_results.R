@@ -70,7 +70,7 @@ espliste<-espGFClim
 #parametres
 selann<-FALSE            # si TRUE selection des annees via un vecteur ci dessous
 annee_sel <-seq(1991,2012)
-delrecru<-TRUE         # si TRUE suppression des recruts = arbres absent du premier inventaire, necessite la tablede mesure source "tabMesuresSelect"
+# delrecru<-TRUE         # si TRUE suppression des recruts = arbres absent du premier inventaire, necessite la tablede mesure source "tabMesuresSelect"
 
 selsite<-FALSE
 site<-c("Paracou")
@@ -120,22 +120,22 @@ nrow(datacr_s)
 nrow(datamo_s)
 
 
-
-if (delrecru) {
-  parametres[3]<-delrecru
-  
- unrecruts<-tabMesuresSelect %>% 
-  filter(CensusYear==min(annee_sel)) %>% 
-  filter(!is.na(CircCorr)) %>% 
-  select(idTree,Forest,Plot,SubPlot,codeEsp)
- unrecruts<-unique(unrecruts)
- datacr_s<-semi_join(datacr_s,unrecruts,by="idTree")
- datamo_s<-semi_join(datamo_s,unrecruts,by="idTree")
-}    
-
-"après delrecru"
-nrow(datacr_s)
-nrow(datamo_s)
+# 
+# if (delrecru) {
+#   parametres[3]<-delrecru
+#   
+#  unrecruts<-tabMesuresSelect %>% 
+#   filter(CensusYear==min(annee_sel)) %>% 
+#   filter(!is.na(CircCorr)) %>% 
+#   select(idTree,Forest,Plot,SubPlot,codeEsp)
+#  unrecruts<-unique(unrecruts)
+#  datacr_s<-semi_join(datacr_s,unrecruts,by="idTree")
+#  datamo_s<-semi_join(datamo_s,unrecruts,by="idTree")
+# }    
+# 
+# "après delrecru"
+# nrow(datacr_s)
+# nrow(datamo_s)
 
  
 if (selsite) {
@@ -159,9 +159,15 @@ nrow(datacr_s)
 nrow(datamo_s)
 
 ##3 Centrage et réduction des variables Logg et climat
-datacr_s$IshInv<-(datacr_s$IshInv-mean(datacr_s$IshInv,na.rm=T))/sd(datacr_s$IshInv,na.rm=T)
-datamo_s$IshInvMo<-(datamo_s$IshInvMo-mean(datamo_s$IshInvMo,na.rm=T))/sd(datamo_s$IshInvMo,na.rm=T)
-datamo_s$IshInvVig<-(datamo_s$IshInvVig-mean(datamo_s$IshInvVig,na.rm=T))/sd(datamo_s$IshInvVig,na.rm=T)
+CentreReduit <- function(vec)
+  return(vec-mean(vec,na.rm=T))/sd(vec,na.rm=T)
+
+datacr_s$IshInv<-CentreReduit(datacr_s$IshInv)
+datamo_s$IshInvMo<-CentreReduit(datamo_s$IshInvMo)
+datamo_s$TxLogg<-CentreReduit(datamo_s$TxLogg)
+
+datacr_s$TxLogg<-CentreReduit(datacr_s$TxLogg)
+datacr_s$TxLogg<-CentreReduit(datacr_s$IshInv)
 
 
 ##4 Pour visu construction d'un tableau arbre en ligne et annee de mesure en colonne
@@ -186,8 +192,8 @@ tabtemp<-datamo_s%>%
   summarise(nbtree_mo=n(),nb_mo=sum(nbmes)) %>% 
   left_join(tabtemp_cr,by="idEsp")
 
-
-
+hist(datacr_s$Diam1[which(datacr_s$Diam1<10)])
+     
 #### B- Calculs et ajouts des colonnes pour des effet aléatoire ####
 
 #1 construction du vecteur pour effet aleatoire
