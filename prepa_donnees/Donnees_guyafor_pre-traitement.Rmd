@@ -121,8 +121,9 @@ tabMesures<-dispoGuyafor %>%
   mutate(NamePlot=paste(Forest,Plot)) %>% # ajout colonne ID pour chaque plot de chaque site
   left_join(ForestLogg, by=c("NamePlot" = "ForestPlot"))  %>% 
       # ajout des colonnes  du tableau ForestLogg pour plot correspondant
-  mutate(idForestLoggEsp=paste(Forest,idTraitement,idEsp))  
+  mutate(idForestLoggEsp=paste(Forest,idTraitement,idEsp)) %>% 
      # ajout colonne ID pour chaque traitement de chaque site et chaque espece
+  filter(CircCorr>=31.4159) #╦ suppression des arbres de moins de 10 cm
 
 # recherche, nb ligne pour une espèce donnée
 #length(tabMesures$idEsp[tabMesures$idEsp=="Bagassa guianensis"])
@@ -323,7 +324,7 @@ Water0<-datamo_sc %>%
 ```
 
 
-#2 Création de l'indice de climat : stress hydrique (à faire : pb de certains inventaires on a NA dans climmo. Ils sont pas représentés dans climvig)
+#2 Création de l'indice de stress hydrique
 ## Démarche générale sur l'utilisation des données climat (pluviométrie) 
 A partir de donnée pluviométrie et de données sur des caractéristiques physiques du sol et de son fonctionnement hydrique, il est possible de calculé un indice journalier de disponibilité en eau du sol pour les arbres : le REW (Relative Extractable Water, cit. Wargner et al 2011). Un REW de 1 correspond à une disponibilité maximale, une valeur de 0 à un absence totale de disponibilité en eau. En dessous d'un REW de 0.4 on considère que les arbres souffrent de stress hydrique.
 Le calcul des REW journalier est fait par le doc "prepa_donnee/Climat/REW_gfclim/Donnees_climat_pre-traitement.Rmd"
@@ -592,6 +593,10 @@ index_trait<-index_trait_mes %>%
   filter((!is.na(PreLogg))&(!is.na(PostLogg))) %>%  # on supprime les dispositifs avec une seule date
   mutate(IndexLogg=(1-PostLogg/PreLogg)*100)                 
  
+# hist(index_trait$AGB)
+# max(index_trait$AGB)
+# temp<-index_trait %>% filter(AGB>=25)
+# hist(temp$AGB)
 ```
 
 ##C Tentative d'ajout indice pour Risquetout et Organabo (non concluant)
