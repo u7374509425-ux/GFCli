@@ -292,7 +292,7 @@ points(x=Dplot,y=Accplot,col="green")
 temps_depart <-Sys.time()
 fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4)
 Sys.time()- temps_depart
-save(fitj_c,file=paste('stan_sorties/stan_',code_esp_cible,'_join_multiesp_sortie.Rdata')) # voi debut du fichier stan pour les specificite
+save(fitj_c,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_join_multiesp_sortie.Rdata')) # voi debut du fichier stan pour les specificite
 
 # selection e parametres de sortiespour exclure des paramètre lies au effet aleatoire : un par observation ("logacc_mu_cr","logit_mo", "logacc_mu_mo", "vig_mo")
 # non testé
@@ -317,7 +317,7 @@ fitj_cr <- stan('cr_model4_multiesp_camila.stan', data = dataj,pars=pars_save,in
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
 )
 Sys.time()- temps_depart
-save(fitj_cr,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_multiesp_3alea_sortier.Rdata'))
+save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_multiesp_3alea_sortier.Rdata'))
 #3alea = 3 effet aleatoire espèce sur le modèle de croissance
 #  temps_depart <-Sys.time()
 #  fitjo <- stan('join_model4_multiesp.stan', data = dataj)
