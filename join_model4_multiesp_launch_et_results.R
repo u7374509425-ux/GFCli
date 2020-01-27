@@ -192,8 +192,10 @@ tabtemp<-datamo_s%>%
   summarise(nbtree_mo=n(),nb_mo=sum(nbmes)) %>% 
   left_join(tabtemp_cr,by="idEsp")
 
-hist(datacr_s$Diam1[which(datacr_s$Diam1<10)])
-     
+# hist(datacr_s$Year1)
+# hist(datacr_s$Diam1)
+# hist(datacr_s$AGR)
+
 #### B- Calculs et ajouts des colonnes pour des effet aléatoire ####
 
 #1 construction du vecteur pour effet aleatoire
@@ -260,7 +262,7 @@ hist(datacr_s$Diam1[which(datacr_s$Diam1<10)])
   save(dataj,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata'))
   save(dataj,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data2.Rdata'),version=2)  # pour export vers Rstudio serveur
   
-#### C- Lancement des chaines ####
+#### C- Lancement des chaines et étude de convergence ####
   
 ##1 graphe de vérif ##
   
@@ -280,12 +282,13 @@ for(i in 1:dataj[["Nesp"]])  graphAcc(dataj,i)
 
 par(mfrow=c(1,1))
 graphAcc(dataj,1) 
+
 Dplot<-dataj[["dbh_cr"]][dataj[["rgEsp_cr"]]==4]/dataj[["dbhmax_cr"]][dataj[["rgEsp_cr"]]==4]
 Accplot<-dataj[["Acc_cr"]][dataj[["rgEsp_cr"]]==4]
 points(x=Dplot,y=Accplot,col="green") 
 
-  #2 lancement des chaines
-# modèle complet
+##2 lancement des chaines
+### modèle complet
 temps_depart <-Sys.time()
 fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4)
 Sys.time()- temps_depart
@@ -301,7 +304,9 @@ save(fitj_c,file=paste('stan_sorties/stan_',code_esp_cible,'_join_multiesp_sorti
 #Sys.time()- temps_depart
 #save(fitj_c,file=paste('stan_sorties/stan_',code_esp_cible,'_join_multiesp_sortie.Rdata')) # voi debut du fichier stan pour les specificite
 
-#modèle de croissance seul
+
+
+### modèle de croissance seul
 pars_save<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
              "cr_sigLoesp","cr_Gesp","cr_Clesp","cr_Loesp")
 
@@ -320,9 +325,6 @@ save(fitj_cr,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_multiesp
 #  save(fitjo,file=paste('stan_',code_esp_cible,'_joint_sortie.Rdata'))
 
 
-#### D- Conctruction des graphes de sortie ####
-## 
-  
 chain<-fitj_cr
 # pars<-chain@model_pars
 
@@ -414,7 +416,7 @@ mcmc_areas(as.array(chain), prob = 0.8,pars = c("sigma"))
 
 #launch_shinystan(chain)
 
-#### E- Predictions ####
+#### D- Predictions et graphe de sortie ####
 nesp<-1
 prediction <- function(donnee,param,nesp) {
 cr_Gesp<-param[paste("cr_Gesp[",nesp,"]",sep="")]
@@ -432,7 +434,7 @@ temp<-chain_sel %>%
   
 param<-apply(temp,2,median) 
 names(param)<-colnames(temp)
-chain_sel %>% select(-chaines,-iterations))
+chain_sel %>% select(-chaines,-iterations)
   
 #pars <- c("Gmax", "Dopt", "Ks","cr_clim","vig","onto","onto_sq","mo_clim","sigma","sigGt") 
 #chain_pars <- chain_mat %>%
