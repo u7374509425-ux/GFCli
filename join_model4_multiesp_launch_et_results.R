@@ -62,10 +62,10 @@ options(mc.cores = parallel::detectCores()) # fixe le nombre de noyaux utilises.
 #fich_sauv<-"Data_16esp_allyear.Rdata"
 #defaut
 code_esp_cible<-"multiesp"
-parametres<-c(FALSE, NA,FALSE,FALSE,NA,FALSE,NA,code_esp_cible)
+espliste<-espGFClim
+parametres<-c(FALSE, NA,FALSE,FALSE,NA,FALSE,paste(espliste,collapse = ", "),code_esp_cible)
 names(parametres)<-c("selann","annee_u","delrecru","selsite","site","selEsp","espliste","codeEsp")
 annee_u <-sort(unique(c(datacr_cl_lo$Year1,datacr_cl_lo$Year2,datamo_cl_lo$Year1,datacr_cl_lo$Year3)))
-espliste<-espGFClim
 
 #parametres
 selann<-FALSE            # si TRUE selection des annees via un vecteur ci dessous
