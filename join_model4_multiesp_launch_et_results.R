@@ -15,17 +15,31 @@
 rm(list=ls(all=TRUE))
 gc() # garbage collector
 
+Library <- function(Packages) {
+  InstallAndLoad <- function(Package) {
+    if (!Package %in% installed.packages()[, 1]) {install.packages(Package)}
+    require(Package, character.only = TRUE)
+  }
+  invisible(sapply(Packages, InstallAndLoad))
+}
 
-library(knitr)
-library(raster)
-#library(leaflet)
-library(tidyverse)
-library(rstan)
-library(bayesplot)
-#library(shinystan)
-library(rstanarm)
-library(brms)
-library(dplyr)
+# Ajouter les packages necessaires ici
+Library(c("knitr","tidyverse","dplyr",
+          "ggplot2","rstan","bayesplot","rstanarm",
+          "brms","raster"
+          ))
+
+# library(knitr)
+# library(raster)
+# library(leaflet)
+# library(tidyverse)
+# library(rstan)
+# library(bayesplot)
+# library(shinystan)
+# library(rstanarm)
+# library(brms)
+# library(dplyr)
+# library(ggplot2)
 
 # load("prepa_donnees/Data16esp_s0_to_join.Rdata") # issu de Donnees_guyafor-pre-traitement.Rmd
 load("prepa_donnees/Data_guyafor_16esp_Cl_join.Rdata")
@@ -259,12 +273,12 @@ tabtemp<-datamo_s%>%
     rgEsp_mo = datamo$EspRank        # rang des espece dans la liste des espece pour la mortalité
   )
 
-  save(dataj,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata'))
-  save(dataj,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data2.Rdata'),version=2)  # pour export vers Rstudio serveur
+  save(dataj,parametres,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata'))
+  save(dataj,parametres,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data2.Rdata'),version=2)  # pour export vers Rstudio serveur
   
 #### C- Lancement des chaines et étude de convergence ####
   
-##1 graphe de vérif ##
+##1 graphe de vérif ####
   
   graphAcc<-function (dataf,n){
     Dgraph<-dataf[["dbh_cr"]][dataf[["rgEsp_cr"]]==n]/dataf[["dbhmax_cr"]][dataf[["rgEsp_cr"]]==n]
@@ -287,17 +301,17 @@ Dplot<-dataj[["dbh_cr"]][dataj[["rgEsp_cr"]]==4]/dataj[["dbhmax_cr"]][dataj[["rg
 Accplot<-dataj[["Acc_cr"]][dataj[["rgEsp_cr"]]==4]
 points(x=Dplot,y=Accplot,col="green") 
 
-##2 lancement des chaines
-### modèle complet
+##2 lancement des chaines ####
+### modèle complet ####
 temps_depart <-Sys.time()
 fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4)
 Sys.time()- temps_depart
-save(fitj_c,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_join_multiesp_sortie.Rdata')) # voi debut du fichier stan pour les specificite
+save(fitj_c,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_join_vcr_sortie.Rdata')) # voi debut du fichier stan pour les specificite
 
 # selection e parametres de sortiespour exclure des paramètre lies au effet aleatoire : un par observation ("logacc_mu_cr","logit_mo", "logacc_mu_mo", "vig_mo")
 # non testé
 #pars_save<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","oo_logit","vig","onto","onto_sq","mo_clim","mo_logg","sigma","cr_sigGesp","cr_sigClesp",
-#             "cr_sigLoesp","cr_Gesp","cr_Clesp","cr_Loesp","mo_sigesp","mo_sigClesp",
+#             "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp","mo_sigesp","mo_sigClesp",
 #             "mo_sigLoesp","mo_esp","mo_Clesp","mo_Loesp")
 #temps_depart <-Sys.time()
 #fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4,pars=pars_save,include=TRUE)
@@ -306,9 +320,9 @@ save(fitj_c,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_join_mul
 
 
 
-### modèle de croissance seul
+### modèle de croissance seul ####
 pars_save<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
-             "cr_sigLoesp","cr_Gesp","cr_Clesp","cr_Loesp")
+             "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp")
 
 temps_depart <-Sys.time()
 fitj_cr <- stan('cr_model4_multiesp_camila.stan', data = dataj,pars=pars_save,include=TRUE,
@@ -317,13 +331,14 @@ fitj_cr <- stan('cr_model4_multiesp_camila.stan', data = dataj,pars=pars_save,in
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
 )
 Sys.time()- temps_depart
-save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_multiesp_3alea_sortier.Rdata'))
+save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_vcr_3alea_sortier.Rdata'))
 #3alea = 3 effet aleatoire espèce sur le modèle de croissance
 #  temps_depart <-Sys.time()
 #  fitjo <- stan('join_model4_multiesp.stan', data = dataj)
 #  Sys.time()- temps_depart]
 #  save(fitjo,file=paste('stan_',code_esp_cible,'_joint_sortie.Rdata'))
 
+## calcul de rhat par paramètres ####
 
 chain<-fitj_cr
 # pars<-chain@model_pars
@@ -334,17 +349,20 @@ chain<-fitj_cr
 
 # modèle joint sans interactions Logg climat
 # pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","oo_logit","vig","onto","onto_sq","mo_clim","mo_logg","sigma","cr_sigGesp","cr_sigClesp",
-# "cr_sigLoesp","cr_Gesp","cr_Clesp","cr_Loesp","mo_sigesp","mo_sigClesp",
+# "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp","mo_sigesp","mo_sigClesp",
 # "mo_sigLoesp","mo_esp","mo_Clesp","mo_Loesp")
 
 #modèle de croissance sans interactions logg climat
 pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
-        "cr_sigLoesp","cr_Gesp","cr_Clesp","cr_Loesp","lp__")
+        "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp","lp__")
+#parametres modèle de croissance sans parametres par esp
+pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
+        "cr_sigLoesp","lp__")
 
 # modèle de mortalité sans interactions logg climat
 # pars <- c("Gmax", "Dopt", "Ks","cr_clim","vig","onto","onto_sq","mo_clim","sigma", "sigGt") 
 
-## calcul de rhat par paramètres ####
+
 print(chain, pars = c(pars)) 
 
 ## Traces des chaines ####
@@ -361,14 +379,16 @@ chain_df<-as.data.frame(chain)
 chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
 chain_df$iterations<-rep(1:1000,4)
 chain_sel<-chain_df %>% 
-  filter(chaines!=2)
+  filter(chaines!=4) %>% 
+  filter (chaines !=1) 
   # select(-starts_with("logacc_mu_cr")) %>% 
   # select(-starts_with("logacc_mu_mo")) %>% 
   # select(-starts_with("logit_mo")) %>% 
   # select(-starts_with("vig_mo")) 
 
 chain_ggpl<-chain_sel %>% 
-  pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" )
+  pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" ) %>% 
+  filter(variables %in% pars)
 
 ggplot(chain_ggpl) + 
   geom_line(aes(x = iterations, y = valeurs ,color= chaines)) +
@@ -378,7 +398,7 @@ ggplot(chain_ggpl) +
 
 ## nuage de points pour paramètre donnés
 pars1<-c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp")
-parsG<-c("oo_Gmax","cr_Gesp[1]", "cr_Gesp[2]", "cr_Gesp[3]", "cr_Gesp[4]")
+parsG<-c("oo_Gmax","cr_Clesp[1]", "cr_Clesp[2]", "cr_Clesp[3]", "cr_Clesp[4]")
 parsCl<-c("cr_clim","cr_sigClesp",
          "cr_Clesp[1]", "cr_Clesp[2]", "cr_Clesp[3]", "cr_Clesp[4]")
 parsLogg<-c("cr_logg","cr_sigLoesp",
@@ -417,28 +437,74 @@ mcmc_areas(as.array(chain), prob = 0.8,pars = c("sigma"))
 #launch_shinystan(chain)
 
 #### D- Predictions et graphe de sortie ####
-nesp<-1
-prediction <- function(donnee,param,nesp) {
-cr_Gesp<-param[paste("cr_Gesp[",nesp,"]",sep="")]
-cr_Clesp<-param[paste("cr_Clesp[",nesp,"]",sep="")]
-cr_Loesp<-param[paste("cr_Loesp[",nesp,"]",sep="")]
-
-logacc <- (param["oo_Gmax"]+ cr_Gesp +
-              param["cr_dmax"]*donnee["dbhmax"]+
-              (param["cr_clim"]+cr_Clesp)* donnee["clim_cr"]+
-              (param["cr_logg"]+cr_Loesp)* donnee["logg_cr"])*
-  exp((-0.5)*pow(log(donnee["dbh_cr"]/(donnee["dbhmax"]*param["Dopt"]))/(param["Ks"]*donnee["WD_cr"]),2)) 
-}
-temp<-chain_sel %>% 
+temp<-chain_sel %>%   # on reprends le tabgleau avec seulement les "bonnes " chaines
   select(-chaines,-iterations)
-  
-param<-apply(temp,2,median) 
+param<-apply(temp,2,median) # on extrait les médianes
 names(param)<-colnames(temp)
-chain_sel %>% select(-chaines,-iterations)
-  
-#pars <- c("Gmax", "Dopt", "Ks","cr_clim","vig","onto","onto_sq","mo_clim","sigma","sigGt") 
-#chain_pars <- chain_mat %>%
-#  select(one_of(pars)) # selection des colonnes paramètres
+
+
+donnee_cr<-as.data.frame(dataj[c(5,7,10,12,16,18,20,22)]) #ensemble des donnees liees au modele de croissance
+donnee_mo<-as.data.frame(dataj[-c(1:5,7,10,12,16,18,20,22)]) #donnees du modele de mortalité
+
+nesp<-donnee_cr$rgEsp_cr
+
+# on utilise les valeur des effet aléatoire de chaque espèce
+donnee_cr$pred <- (param["oo_Gmax"]+ param[paste("cr_Gesp[",nesp,"]",sep="")] +
+              param["cr_dmax"]*donnee_cr$dbhmax+
+              (param["cr_clim"]+param[paste("cr_Clesp[",nesp,"]",sep="")])* donnee_cr$clim_cr+
+              (param["cr_logg"]+param[paste("cr_Loesp[",nesp,"]",sep="")])* donnee_cr$logg_cr)*
+  exp((-0.5)*(log(donnee_cr$dbh_cr/(donnee_cr$dbhmax*param["Dopt"]))/(param["Ks"]*donnee_cr$WD_cr))*
+             (log(donnee_cr$dbh_cr/(donnee_cr$dbhmax*param["Dopt"]))/(param["Ks"]*donnee_cr$WD_cr)))
+
+donnee_cr<-donnee_cr %>% left_join(transmute(tesp,idEsp=idEsp,rgEsp_cr=rank),by="rgEsp_cr")
+
+# temps_depart<-Sys.time()
+ggplot(donnee_cr) +
+  geom_point(aes(x=dbh_cr/dbhmax_cr,y=log(Acc_cr+1))) +
+  geom_line (aes(x=dbh_cr/dbhmax_cr,y=pred),color="red",size=1) +
+  facet_wrap(~idEsp)
+# Sys.time()- temps_depart 
+
+vmed<-apply(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variabme
+names(vmed)<-colnames(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr))
+
+onto<-seq(0,2,by=0.04)
+
+vparam<-chain_sel %>% 
+  select(oo_Gmax,Ks,Dopt,cr_clim,cr_logg,cr_dmax,
+         sigma,cr_sigGesp,cr_sigClesp,cr_sigLoesp) %>% 
+  slice(50:150)
+
+Fpred_cr<-function(vparam,onto,vmed){
+  return (vparam["oo_Gmax"]+rnorm(1,mean=0,vparam["cr_sigGesp"])+
+                vparam["cr_dmax"]*vmed["dbhmax_cr"]+
+                (vparam["cr_clim"]+rnorm(1,0,vparam["cr_sigClesp"]))*vmed["clim_cr"]+
+                (vparam["cr_logg"]+rnorm(1,0,vparam["cr_sigLoesp"]))*vmed["logg_cr"])*
+    exp((-0.5)*(log(onto/param["Dopt"])/(param["Ks"]*vmed["WD_cr"]))*
+               (log(onto/param["Dopt"])/(param["Ks"]*vmed["WD_cr"])))+
+    rnorm(1,0,vparam["sigma"])
+}
+
+
+model_pred<-vparam
+i<-2
+j<-2
+t<-2
+
+temps_depart<-Sys.time()
+for (i in 1:length(onto)){
+  for(t in 1:100){
+   srt<-rep(NA,nrow(vparam))
+   for(j in 1:nrow(vparam)){
+      srt[j]<-Fpred_cr(vparam[j,],onto[i],vmed)
+    }
+   model_pred<-cbind(model_pred,srt)
+  }
+}
+Sys.time()- temps_depart 
+
+
+temp<-apply(vparam,1,Fpred_cr(vparam,0.5,vmed))
 
 
 par(mfrow=c(1,1))
@@ -473,7 +539,7 @@ pars_median<-apply(as.matrix(chain_pars),2,median)
 diam_ini<-dataj[["dbh1"]]
 obs1<-dataj[["Acc1"]]
 
-#logacc_mu_cr[n1] = (oo_Gmax+cr_Gesp[rgEsp_cr[n1]]+cr_clim*clim_cr[n1]+cr_logg*logg_cr[n1])*exp ((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*(Dopt+cr_Desp[rgEsp_cr[n1]])))/Ks,2)); // obligation de faire un boucle sinon erreur de la fonction pow()
+#logacc_mu_cr[n1] = (oo_Gmax+cr_Clesp[rgEsp_cr[n1]]+cr_clim*clim_cr[n1]+cr_logg*logg_cr[n1])*exp ((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*(Dopt+cr_Desp[rgEsp_cr[n1]])))/Ks,2)); // obligation de faire un boucle sinon erreur de la fonction pow()
 
 mod<-pars_median["Gmax"]*exp(-0.5*(log(diam_ini/pars_median["Dopt"])/pars_median["Ks"])^2)
 mod<-exp(mod)-1
