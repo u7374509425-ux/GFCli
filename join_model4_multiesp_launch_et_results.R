@@ -24,18 +24,18 @@ Library <- function(Packages) {
 }
 
 # Ajouter les packages necessaires ici
-Library(c("knitr","tidyverse","dplyr",
-          "ggplot2","rstan","bayesplot","rstanarm",
-          "brms","raster"
+Library(c("knitr","raster","tidyverse","dplyr",
+          "ggplot2","rstan","bayesplot","rstanarm","brms"
           ))
+# attention à l'ordre d'installation des packages, conflit de fonctions entre raster et tidyverse
 
 # library(knitr)
 # library(raster)
-# library(leaflet)
+# # library(leaflet)
 # library(tidyverse)
 # library(rstan)
 # library(bayesplot)
-# library(shinystan)
+# # library(shinystan)
 # library(rstanarm)
 # library(brms)
 # library(dplyr)
@@ -210,7 +210,7 @@ tabtemp<-datamo_s%>%
 # hist(datacr_s$Diam1)
 # hist(datacr_s$AGR)
 
-#### B- Calculs et ajouts des colonnes pour des effet aléatoire ####
+#### B- Calculs et ajouts des colonnes pour des effets aléatoires ####
 
 #1 construction du vecteur pour effet aleatoire
     #sur individus
@@ -302,7 +302,7 @@ Accplot<-dataj[["Acc_cr"]][dataj[["rgEsp_cr"]]==4]
 points(x=Dplot,y=Accplot,col="green") 
 
 ##2 lancement des chaines ####
-### modèle complet ####
+# modèle complet ####
 temps_depart <-Sys.time()
 fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4)
 Sys.time()- temps_depart
@@ -320,7 +320,7 @@ save(fitj_c,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_join_vcr
 
 
 
-### modèle de croissance seul ####
+# modèle de croissance seul ####
 pars_save<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
              "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp")
 
@@ -338,7 +338,7 @@ save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_cami
 #  Sys.time()- temps_depart]
 #  save(fitjo,file=paste('stan_',code_esp_cible,'_joint_sortie.Rdata'))
 
-## calcul de rhat par paramètres ####
+##1 calcul de rhat par paramètres ####
 
 chain<-fitj_cr
 # pars<-chain@model_pars
@@ -365,7 +365,7 @@ pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp"
 
 print(chain, pars = c(pars)) 
 
-## Traces des chaines ####
+##2 Traces des chaines ####
 traceplot(chain, pars=c("lp__")) # plot les chaines dela vraisemblance
 
 traceplot(chain, pars=pars, nrow=4) # nrow : nombre de lignes de graphe
