@@ -448,7 +448,7 @@ donnee_mo<-as.data.frame(dataj[-c(1:5,7,10,12,16,18,20,22)]) #donnees du modele 
 
 nesp<-donnee_cr$rgEsp_cr
 
-# on utilise les valeur des effet aléatoire de chaque espèce
+# on utilise les valeurs des effet aléatoire de chaque espèce
 donnee_cr$pred <- (param["oo_Gmax"]+ param[paste("cr_Gesp[",nesp,"]",sep="")] +
               param["cr_dmax"]*donnee_cr$dbhmax+
               (param["cr_clim"]+param[paste("cr_Clesp[",nesp,"]",sep="")])* donnee_cr$clim_cr+
@@ -465,46 +465,61 @@ ggplot(donnee_cr) +
   facet_wrap(~idEsp)
 # Sys.time()- temps_depart 
 
-vmed<-apply(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variabme
-names(vmed)<-colnames(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr))
 
-onto<-seq(0,2,by=0.04)
-
-vparam<-chain_sel %>% 
-  select(oo_Gmax,Ks,Dopt,cr_clim,cr_logg,cr_dmax,
-         sigma,cr_sigGesp,cr_sigClesp,cr_sigLoesp) %>% 
-  slice(50:150)
-
-Fpred_cr<-function(vparam,onto,vmed){
-  return (vparam["oo_Gmax"]+rnorm(1,mean=0,vparam["cr_sigGesp"])+
-                vparam["cr_dmax"]*vmed["dbhmax_cr"]+
-                (vparam["cr_clim"]+rnorm(1,0,vparam["cr_sigClesp"]))*vmed["clim_cr"]+
-                (vparam["cr_logg"]+rnorm(1,0,vparam["cr_sigLoesp"]))*vmed["logg_cr"])*
-    exp((-0.5)*(log(onto/param["Dopt"])/(param["Ks"]*vmed["WD_cr"]))*
-               (log(onto/param["Dopt"])/(param["Ks"]*vmed["WD_cr"])))+
-    rnorm(1,0,vparam["sigma"])
+# pour accélérer la boucle, stocker 1000 tirages de rnorm dans un vecteur 
+# et ensuite aller chercher les valeurs dans ce vecteur
+i<-2
+vparamj<-vparam[j,]
+ontos<-onto_nn
+sigmas<-sig
+Fpred_cr<-function(i,vparamj,ontos,vmed,sigmas){
+  return (as.numeric(vparamj["oo_Gmax"])+as.numeric(sigmas[i,]["cr_sigGesp"])+
+            as.numeric(vparamj["cr_dmax"])*vmed["dbhmax_cr"]+
+                (as.numeric(vparamj["cr_clim"])+as.numeric(sigmas[i,]["cr_sigClesp"]))*vmed["clim_cr"]+
+                (as.numeric(vparamj["cr_logg"])+as.numeric(sigmas[i,]["cr_sigLoesp"]))*vmed["logg_cr"])*
+    exp((-0.5)*(log(onto[i]/as.numeric(vparamj["Dopt"]))/(as.numeric(vparamj["Ks"])*vmed["WD_cr"]))*
+               (log(onto[i]/as.numeric(vparamj["Dopt"]))/(as.numeric(vparamj["Ks"])*vmed["WD_cr"])))+
+    sigmas[i,]["sigma"]
 }
 
 
-model_pred<-vparam
-i<-2
-j<-2
-t<-2
+
+vparam<-chain_sel %>% 
+  select(oo_Gmax,Ks,Dopt,cr_clim,cr_logg,cr_dmax,sigma,cr_sigGesp,cr_sigClesp,cr_sigLoesp) %>% 
+  slice(50:150)
+
+vmed<-apply(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variabme
+names(vmed)<-colnames(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr))
+
+onto<-seq(0,2,by=0.04) #abscisse pour calcul du modèle"
+
+repet<-10 # répétitions par ligne de paramètre et par abscisse (onto)
+nn<-length(onto)*repet # nombre de simulations pour un jeu de paramètres 
+onto_nn<-rep(onto,each=repet) # abscisses pour une valeur de paramètres
+pred_pparam<-matrix(data=NA,nrow=nn,ncol=0)
+
+# j<-2
 
 temps_depart<-Sys.time()
-for (i in 1:length(onto)){
-  for(t in 1:100){
-   srt<-rep(NA,nrow(vparam))
-   for(j in 1:nrow(vparam)){
-      srt[j]<-Fpred_cr(vparam[j,],onto[i],vmed)
+for(j in 1:nrow(vparam)){
+  srt<-rep(NA,nn)
+  cr_sigGesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigGesp"]))
+  cr_sigClesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigClesp"]))
+  cr_sigLoesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigLoesp"]))
+  sigma<-rnorm(nn,mean=0,as.numeric(vparam[j,]["sigma"]))
+  sig<-data.frame(cr_sigGesp,cr_sigClesp,cr_sigLoesp,sigma)
+  
+  for (i in 1:nn){
+    srt[i]<-Fpred_cr(i,vparam[j,],ontos,vmed,sig)
     }
-   model_pred<-cbind(model_pred,srt)
-  }
+    
+  # srt<-lapply(X=1:nn, FUN=Fpred_cr(,vparam[j,],onto_nn,vmed,sig))
+  pred_pparam<-cbind(pred_pparam,srt)
 }
 Sys.time()- temps_depart 
 
 
-temp<-apply(vparam,1,Fpred_cr(vparam,0.5,vmed))
+temp<-lapply(X=1:length(vparam),FUN=Fpred_cr(,vparam,0.5,vmed))
 
 
 par(mfrow=c(1,1))
