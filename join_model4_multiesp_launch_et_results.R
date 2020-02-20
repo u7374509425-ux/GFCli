@@ -306,8 +306,8 @@ ggplot(datacr_s, aes(x=reorder(Forest,nb_acc),y=nb_acc))+
     rgEsp_mo = datamo$EspRank        # rang des espece dans la liste des espece pour la mortalité
   )
 
-  save(dataj,parametres,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata'))
-  save(dataj,parametres,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data2.Rdata'),version=2)  # pour export vers Rstudio serveur
+  save(dataj,parametres,tesp,code_esp_cible,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata'))
+  save(dataj,parametres,tesp,code_esp_cible,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data2.Rdata'),version=2)  # pour export vers Rstudio serveur
   
 #### C- Lancement des chaines et étude de convergence ####
   
