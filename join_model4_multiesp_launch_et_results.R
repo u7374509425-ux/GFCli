@@ -9,11 +9,11 @@
 ## Etape C : lancement d'une chaine avec un dataj
 ## Etape D : mise en forme des sorties
 
+rm(list=ls(all=TRUE))
+gc() # garbage collector
 
 
 #### initialisation et chargement des données #####
-rm(list=ls(all=TRUE))
-gc() # garbage collector
 
 Library <- function(Packages) {
   InstallAndLoad <- function(Package) {
@@ -25,7 +25,7 @@ Library <- function(Packages) {
 
 # Ajouter les packages necessaires ici
 Library(c("knitr","raster","tidyverse","dplyr",
-          "ggplot2","rstan","bayesplot","rstanarm","brms"
+          "ggplot2","rstan","bayesplot","rstanarm"
           ))
 # attention à l'ordre d'installation des packages, conflit de fonctions entre raster et tidyverse
 
@@ -86,13 +86,18 @@ selann<-FALSE            # si TRUE selection des annees via un vecteur ci dessou
 annee_sel <-seq(1991,2012)
 # delrecru<-TRUE         # si TRUE suppression des recruts = arbres absent du premier inventaire, necessite la tablede mesure source "tabMesuresSelect"
 
-selsite<-FALSE
-site<-c("Paracou")
+selsite<-TRUE
+# site<-c("Paracou")
+site<-c("Acarouany","BAFOG","Laussat","Montagne Plomb","Montagne Tortue","Nouragues",
+"Régina St Georges","Tibourou","Trésor") # tous sauf Paracou  soit 7% des données
 
 selEsp<-FALSE
 #esp_sel<-c("Sextonia rubra","Manilkara bidentata","Dicorynia guianensis","Goupia glabra")
-esp_sel<-c("Sextonia rubra","Manilkara bidentata","Ruizterania albiflora","Symphonia globulifera")
-code_sorties<-"Sr_Mb_Ra_Sg_CLmulti"
+esp_sel<-c("Bocoa prouacensis", "Carapa surinamensis", "Chrysophyllum sanguinolentum", "Dicorynia guianensis",
+           "Goupia glabra", "Qualea rosea", "Sextonia rubra", "Symphonia globulifera", "Virola michelii")
+
+
+code_sorties<-"s_paracou"
 
 datacr_s<-datacr_cl_lo
 datamo_s<-datamo_cl_lo
@@ -103,7 +108,6 @@ nrow(datamo_s)
 
 # tableau résumé espèces
 tabtemp_cr<-datacr_s%>%
-  filter(Forest%in%site)%>% 
   #  semi_join(unrecruts,by="idTree") %>%
   group_by(idEsp,idTree) %>% 
   summarise(nbmes=n()) %>% 
@@ -111,7 +115,6 @@ tabtemp_cr<-datacr_s%>%
   summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) 
 
 tabtemp<-datamo_s%>%
-  filter(Forest%in%site)%>% 
   #  semi_join(unrecruts,by="idTree") %>%
   group_by(idEsp,idTree) %>% 
   summarise(nbmes=n()) %>% 
@@ -157,6 +160,7 @@ if (selsite) {
   parametres[5]<-paste(site,collapse = ", ") # Colle tous les element de site sur une seule chaine de caracteres
   datacr_s<-filter(datacr_s,Forest %in% site)
   datamo_s<-filter(datamo_s,Forest %in% site)
+  code_esp_cible<-code_sorties
 }  
 
 if (selEsp) {
@@ -178,27 +182,27 @@ CentreReduit <- function(vec)
 
 datacr_s$IshInv<-CentreReduit(datacr_s$IshInv)
 datamo_s$IshInvMo<-CentreReduit(datamo_s$IshInvMo)
+
 datamo_s$TxLogg<-CentreReduit(datamo_s$TxLogg)
-
 datacr_s$TxLogg<-CentreReduit(datacr_s$TxLogg)
-datacr_s$TxLogg<-CentreReduit(datacr_s$IshInv)
 
 
-##4 Pour visu construction d'un tableau arbre en ligne et annee de mesure en colonne
+##4 graphes et tableau résumé 
+#tableau arbre en ligne et annee de mesure en colonne
 ArbresAnnee<-datacr_s%>%
   select(idTree,idEsp,idLogg,Diam1,Forest,Year1,Dmax95)%>%
   spread(key=Year1,value=Diam1)
+
 # tableau résumé espèces
 tabtemp_cr<-datacr_s%>%
-  filter(Forest%in%site)%>% 
   #  semi_join(unrecruts,by="idTree") %>%
   group_by(idEsp,idTree) %>% 
   summarise(nbmes=n()) %>% 
   group_by(idEsp) %>% 
-  summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) 
+  summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) %>% 
+  arrange(desc(nb_acc))
 
 tabtemp<-datamo_s%>%
-  filter(Forest%in%site)%>% 
   #  semi_join(unrecruts,by="idTree") %>%
   group_by(idEsp,idTree) %>% 
   summarise(nbmes=n()) %>% 
@@ -206,8 +210,37 @@ tabtemp<-datamo_s%>%
   summarise(nbtree_mo=n(),nb_mo=sum(nbmes)) %>% 
   left_join(tabtemp_cr,by="idEsp")
 
-# hist(datacr_s$Year1)
-# hist(datacr_s$Diam1)
+ggplot(tabtemp, aes(x=reorder(idEsp,nb_acc),y=nb_acc))+
+  geom_bar(stat="identity")+
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.7))
+
+# tableau résumé sites
+tabforests_cr<-datacr_s%>%
+  group_by(Forest,idTree) %>% 
+  summarise(nbmes=n()) %>% 
+  group_by(Forest) %>% 
+  summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) %>% 
+  arrange(desc(nb_acc))
+
+tabforests<-datamo_s%>%
+  group_by(Forest,idTree) %>% 
+  summarise(nbmes=n()) %>% 
+  group_by(Forest) %>% 
+  summarise(nbtree_mo=n(),nb_mo=sum(nbmes)) %>% 
+  left_join(tabforests_cr,by="Forest")
+
+ggplot(tabforests, aes(x=reorder(Forest,nb_acc),y=nb_acc))+
+  geom_bar(stat="identity")+
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.7))
+
+
+# distribution des variables
+ggplot(datacr_s, aes(x=reorder(Forest,nb_acc),y=nb_acc))+
+  geom_bar(stat="identity")+
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.7))
+
+ hist(datacr_s$IshInv)
+ hist(datacr_cl_lo$TxLogg)
 # hist(datacr_s$AGR)
 
 #### B- Calculs et ajouts des colonnes pour des effets aléatoires ####
@@ -327,18 +360,18 @@ pars_save<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sig
 temps_depart <-Sys.time()
 fitj_cr <- stan('cr_model4_multiesp_camila.stan', data = dataj,pars=pars_save,include=TRUE,
                 chain=4,
-                iter=2000,warmup=1000,
+                iter=4000,warmup=3000,
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
-)
+                )
 Sys.time()- temps_depart
-save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_vcr_3alea_sortier.Rdata'))
+save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_vcr_3alea_sortie_i4.Rdata'))
 #3alea = 3 effet aleatoire espèce sur le modèle de croissance
 #  temps_depart <-Sys.time()
 #  fitjo <- stan('join_model4_multiesp.stan', data = dataj)
 #  Sys.time()- temps_depart]
 #  save(fitjo,file=paste('stan_',code_esp_cible,'_joint_sortie.Rdata'))
 
-##1 calcul de rhat par paramètres ####
+##1 vecteurs de paramètres  et calcul de rhat  ####
 
 chain<-fitj_cr
 # pars<-chain@model_pars
@@ -346,6 +379,19 @@ chain<-fitj_cr
 # paste(chain@model_pars,collapse = ",") # pour sélectionner facilement les paramètre dans la console
 
 # liste des noms des colonnes de parametres pour graphes de sortie. A limiter aux parametres  : exclure transformed parameters et generated quantities 
+espliste<-parametres["espliste"]
+
+cr_Gesp_multi<-paste("cr_Gesp[",1:length(espliste),"]",sep="")
+cr_Clesp_multi<-paste("cr_Clesp[",1:length(espliste),"]",sep="")
+cr_Loesp_multi<-paste("cr_Loesp[",1:length(espliste),"]",sep="")
+
+pars1<-c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp")
+parsG<-c("oo_Gmax","cr_sigGesp",cr_Gesp_multi)
+parsCl<-c("cr_clim","cr_sigClesp",
+          cr_Clesp_multi)
+parsLogg<-c("cr_logg","cr_sigLoesp",
+            cr_Loesp_multi)
+
 
 # modèle joint sans interactions Logg climat
 # pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","oo_logit","vig","onto","onto_sq","mo_clim","mo_logg","sigma","cr_sigGesp","cr_sigClesp",
@@ -353,17 +399,21 @@ chain<-fitj_cr
 # "mo_sigLoesp","mo_esp","mo_Clesp","mo_Loesp")
 
 #modèle de croissance sans interactions logg climat
-pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
+pars_cr<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
         "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp","lp__")
 #parametres modèle de croissance sans parametres par esp
-pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
+pars_non_spe<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
         "cr_sigLoesp","lp__")
 
 # modèle de mortalité sans interactions logg climat
 # pars <- c("Gmax", "Dopt", "Ks","cr_clim","vig","onto","onto_sq","mo_clim","sigma", "sigGt") 
 
+pars<-pars_cr
 
-print(chain, pars = c(pars)) 
+
+# calcul rhat
+print(chain, pars = pars_cr) 
+print(chain, pars = cr_Clesp_multi) 
 
 ##2 Traces des chaines ####
 traceplot(chain, pars=c("lp__")) # plot les chaines dela vraisemblance
@@ -386,9 +436,26 @@ chain_sel<-chain_df %>%
   # select(-starts_with("logit_mo")) %>% 
   # select(-starts_with("vig_mo")) 
 
+espmodel<-as.data.frame(strsplit(parametres["espliste"],", "))
+espmodel$espliste<-as.character(espmodel$espliste)
+espmodel$nesp<-1:length(espmodel$espliste)
+
 chain_ggpl<-chain_sel %>% 
   pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" ) %>% 
-  filter(variables %in% pars)
+  mutate(test=ifelse(substr(variables,nchar(variables),nchar(variables))=="]",
+                     ifelse(substr(variables,nchar(variables)-2,nchar(variables)-2)=="[",1,2)
+                     ,0)) %>% 
+  mutate(nesp=ifelse(test==1,as.numeric(substr(variables,nchar(variables)-1,nchar(variables)-1)),
+                     ifelse(test==2,as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)),
+                            -1))) %>% 
+  left_join(espmodel,by="nesp") %>% 
+  mutate(especes=ifelse(is.na(espliste),variables,espliste)) %>% 
+  select(-test,-espliste)
+
+
+# chain_ggpl<-chain_sel %>% 
+#   pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" ) %>% 
+#   filter(variables %in% pars)
 
 ggplot(chain_ggpl) + 
   geom_line(aes(x = iterations, y = valeurs ,color= chaines)) +
@@ -396,17 +463,8 @@ ggplot(chain_ggpl) +
   facet_wrap(~variables,scales="free_y")
 
 
-## nuage de points pour paramètre donnés
-pars1<-c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp")
-parsG<-c("oo_Gmax","cr_Clesp[1]", "cr_Clesp[2]", "cr_Clesp[3]", "cr_Clesp[4]")
-parsCl<-c("cr_clim","cr_sigClesp",
-         "cr_Clesp[1]", "cr_Clesp[2]", "cr_Clesp[3]", "cr_Clesp[4]")
-parsLogg<-c("cr_logg","cr_sigLoesp",
-            "cr_Loesp[1]","cr_Loesp[2]","cr_Loesp[3]","cr_Loesp[4]")
+##3 nuage de points pour paramètres donnés ####
 
-
-pars_pairs<-unique(chain_ggpl %>% select(variables))
-pars_pairs<-pars_pairs$variables
 mcmc_pairs(as.array(chain), pars = pars1)
 mcmc_pairs(as.array(chain), pars = parsG)
 mcmc_pairs(as.array(chain), pars = parsCl)
@@ -414,10 +472,9 @@ mcmc_pairs(as.array(chain), pars = parcLogg)
 # GGally::ggpairs() pour faire des pairs plus lisibles
 
 
-ggplot(chain_ggpl) +
-  geom_point()
 
-## Posteriors
+##4 Posteriors ####
+
 #for(i in 1:length(pars))
 #  mcmc_areas(as.array(chain), prob = 0.8,pars = pars[i])
 
@@ -434,12 +491,31 @@ mcmc_areas(as.array(chain), prob = 0.8,pars = c("Dopt"))
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("cr_dmax"))
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("sigma"))
 
+ggplot(chain_ggpl %>% filter(variables%in%parsG)) + 
+  geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
+  xlab("Parametres OO de G") +
+  geom_vline(xintercept = 0, linetype = "solid")+
+  facet_wrap(~especes)
+
+ggplot(chain_ggpl %>% filter(variables%in%parsCl)) + 
+  geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
+  xlab("Parametres Climat") +
+  geom_vline(xintercept = 0, linetype = "solid")+
+  facet_wrap(~especes)
+
+ggplot(filter(chain_ggpl,variables%in%parsLogg)) + 
+  geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
+  xlab("Parametres Logg") +
+  geom_vline(xintercept = 0, linetype = "solid")+
+  facet_wrap(~especes)
 #launch_shinystan(chain)
 
 #### D- Predictions et graphe de sortie ####
-temp<-chain_sel %>%   # on reprends le tabgleau avec seulement les "bonnes " chaines
+temp<-chain_sel %>%   # on reprends le tableau avec seulement les "bonnes " chaines
   select(-chaines,-iterations)
-param<-apply(temp,2,median) # on extrait les médianes
+
+###1 calcul des prédiction pour chaque observé
+param<-apply(temp,2,median) # on extrait les médianes des paramètres
 names(param)<-colnames(temp)
 
 
@@ -468,10 +544,14 @@ ggplot(donnee_cr) +
 
 # pour accélérer la boucle, stocker 1000 tirages de rnorm dans un vecteur 
 # et ensuite aller chercher les valeurs dans ce vecteur
-i<-2
-vparamj<-vparam[j,]
-ontos<-onto_nn
-sigmas<-sig
+
+# i<-2
+# vparamj<-vparam[j,]
+# ontos<-Abscisses
+# sigmas<-sig
+
+###2 calcul de prévision et erreur pour diamètre (ontogénie) donné par espèce et sur un range de variables climatiques
+
 Fpred_cr<-function(i,vparamj,ontos,vmed,sigmas){
   return (as.numeric(vparamj["oo_Gmax"])+as.numeric(sigmas[i,]["cr_sigGesp"])+
             as.numeric(vparamj["cr_dmax"])*vmed["dbhmax_cr"]+
@@ -483,19 +563,18 @@ Fpred_cr<-function(i,vparamj,ontos,vmed,sigmas){
 }
 
 
-
 vparam<-chain_sel %>% 
-  select(oo_Gmax,Ks,Dopt,cr_clim,cr_logg,cr_dmax,sigma,cr_sigGesp,cr_sigClesp,cr_sigLoesp) %>% 
-  slice(50:150)
+  select(oo_Gmax,Ks,Dopt,cr_clim,cr_logg,cr_dmax,sigma,cr_sigGesp,cr_sigClesp,cr_sigLoesp) #%>% 
+  # slice(50:100)
 
-vmed<-apply(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variabme
+vmed<-apply(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variables
 names(vmed)<-colnames(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr))
 
-onto<-seq(0,2,by=0.04) #abscisse pour calcul du modèle"
+onto<-seq(0.08,2,by=0.08) #abscisse pour calcul du modèle"
 
-repet<-10 # répétitions par ligne de paramètre et par abscisse (onto)
+repet<-100 # répétitions par ligne de paramètre et par abscisse (onto)
 nn<-length(onto)*repet # nombre de simulations pour un jeu de paramètres 
-onto_nn<-rep(onto,each=repet) # abscisses pour une valeur de paramètres
+abscisses<-rep(onto,each=repet) # abscisses pour une valeur de paramètres
 pred_pparam<-matrix(data=NA,nrow=nn,ncol=0)
 
 # j<-2
@@ -513,13 +592,43 @@ for(j in 1:nrow(vparam)){
     srt[i]<-Fpred_cr(i,vparam[j,],ontos,vmed,sig)
     }
     
-  # srt<-lapply(X=1:nn, FUN=Fpred_cr(,vparam[j,],onto_nn,vmed,sig))
+  # srt<-lapply(X=1:nn, FUN=Fpred_cr(,vparam[j,],abscisses,vmed,sig))
   pred_pparam<-cbind(pred_pparam,srt)
+  colnames(pred_pparam)[j]<-paste("param",j,sep="")
 }
 Sys.time()- temps_depart 
 
 
-temp<-lapply(X=1:length(vparam),FUN=Fpred_cr(,vparam,0.5,vmed))
+# colnames(pred_pparam)<-rep("")
+#calcul des medianes et pc par abscisses
+# pred_ontos$Abscisse<-abscisses
+pred_pc<-as.data.frame(pred_pparam)
+pred_pc$abscisses<-abscisses 
+
+pred_pc<-pred_pc%>% 
+  pivot_longer(
+    cols= starts_with("param"),
+    names_to="num_param",
+    # names_prefix = "param",
+    # names_ptypes=list(param=integer()),# pour tranformer les titre de colonne parame en entier
+    values_to = "predictions") %>% 
+  group_by(abscisses) %>% 
+  summarise(pc01=quantile(predictions,probs=0.01),
+            pc05=quantile(predictions,probs=0.05),
+            mediane=quantile(predictions,probs=0.50),
+            pc95=quantile(predictions,probs=0.95),
+            pc99=quantile(predictions,probs=0.99))
+
+  
+  
+
+ggplot(pred_pc) +
+  geom_point(data=donnee_cr,aes(x=dbh_cr/dbhmax_cr,y=log(Acc_cr+1)))+ 
+  geom_ribbon (aes(x=abscisses,ymin=pc05,ymax=pc95),color="grey")+
+  geom_line (aes(x=abscisses,y=mediane),color="red",size=1) +
+  geom_line (aes(x=abscisses,y=pc01),color="grey",size=0.5,linetype = "dashed") +
+  geom_line (aes(x=abscisses,y=pc99),color="grey",size=0.5,linetype = "dashed") 
+
 
 
 par(mfrow=c(1,1))
