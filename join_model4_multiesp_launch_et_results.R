@@ -371,6 +371,20 @@ save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_cami
 #  Sys.time()- temps_depart]
 #  save(fitjo,file=paste('stan_',code_esp_cible,'_joint_sortie.Rdata'))
 
+# modèle mortalité seul ####
+pars_save<-c("oo_logit","mo_esp","onto","onto_sq","mo_clim","mo_logg","mo_sigesp","mo_sigClesp",
+            "mo_sigLoesp","mo_Clesp","mo_Loesp")
+
+temps_depart <-Sys.time()
+fitj_mo <- stan('mo_model4_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
+                chain=4,
+                iter=2000,warmup=1000,
+                # control = list(adapt_delta = 0.99,max_treedepth = 15)
+)
+Sys.time()- temps_depart
+save(fitj_mo,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_mo_sortie_i2.Rdata'))
+
+
 ##1 vecteurs de paramètres  et calcul de rhat  ####
 
 chain<-fitj_cr
@@ -510,7 +524,7 @@ ggplot(filter(chain_ggpl,variables%in%parsLogg)) +
   facet_wrap(~especes)
 #launch_shinystan(chain)
 
-#### D- Predictions et graphe de sortie ####
+#### D- Predictions et graphe de sortie  afaire prévision par espèce et par classe d'indice de climat####
 temp<-chain_sel %>%   # on reprends le tableau avec seulement les "bonnes " chaines
   select(-chaines,-iterations)
 
