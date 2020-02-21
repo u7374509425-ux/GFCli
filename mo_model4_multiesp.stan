@@ -47,9 +47,13 @@ parameters {
   real <lower=0> onto_sq;   // Parameter mortalite
   real mo_clim;             // Parameter mortalite
   real  mo_logg;           // Parameter mortalite
-  real <lower=0> sigma;     // variance modèle de mortalite
-  real <lower=0> mo_sigesp;     // variance effet alea espece sur Gmax
-  vector [Nesp] mo_esp;     //effet aleatoire especes sur Gmax : a declare ici et non dans la partie modele car il entre dans le calcul de transformed parameters
+//  real <lower=0> sigma;     // variance modèle de croissance
+  real <lower=0> mo_sigOoesp;     // variance effet alea espece sur Gmax
+  real <lower=0> mo_sigClesp;     // variance effet alea espece sur Gmax
+  real <lower=0> mo_sigLoesp;     // variance effet alea espece sur Gmax
+  vector [Nesp] mo_Ooesp;     //effet aleatoire especes sur oo du logit : a declare ici et non dans la partie modele car il entre dans le calcul de transformed parameters
+  vector [Nesp] mo_Clesp;     //effet aleatoire especes sur Climat du logit : a declare ici et non dans la partie modele car il entre dans le calcul de transformed parameters
+  vector [Nesp] mo_Loesp;     //effet aleatoire especes sur Logf du logit : a declare ici et non dans la partie modele car il entre dans le calcul de transformed parameters
 }
 
 
@@ -62,8 +66,13 @@ transformed parameters {    // Transformed parameters block
 
 // modele d'acroissement
 //  for(n1 in 1:Ncr){ 
-//    logacc_mu_cr[n1] = (oo_Gmax+cr_Gesp[rgEsp_cr[n1]]+cr_dmax*dbhmax_cr[n1]+cr_clim*clim_cr[n1]+cr_logg*logg_cr[n1])*exp((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*Dopt))/(Ks*WD_cr[n1]),2)); // obligation de faire un boucle sinon erreur de la fonction pow()
-//  } // avec effet alea
+//    logacc_mu_cr[n1] = (oo_Gmax+cr_Gesp[rgEsp_cr[n1]]+
+//                         cr_dmax*dbhmax_cr[n1]+
+//                         cr_clim*clim_cr[n1]+
+//                         cr_logg*logg_cr[n1])*
+//                      exp((-0.5)*
+//                      pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*Dopt))/(Ks*WD_cr[n1]),2)); // obligation de faire un boucle sinon erreur de la fonction pow()
+//  } // avec effet alea sur oo
 //  for(n1 in 1:Ncr){ 
 //    logacc_mu_cr[n1] = (oo_Gmax+cr_dmax*dbhmax_cr[n1]+cr_clim*clim_cr[n1]+cr_logg*logg_cr[n1])*exp((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*Dopt))/(Ks*WD_cr[n1]),2)); // obligation de faire un boucle sinon erreur de la fonction pow()
 //  } // sans effet alea
@@ -74,11 +83,11 @@ transformed parameters {    // Transformed parameters block
 //    vig_mo[n2]=log(Acc_mo[n2]+1)-logacc_mu_mo[n2];                      
 //    logit_mo[n2]= oo_logit+mo_vig*vig_mo[n2]+onto*dbh_mo[n2]/dbhmax_mo[n2]+onto_sq*pow(dbh_mo[n2]/dbhmax_mo[n2],2)+mo_clim*clim_mo[n2]+mo_logg*logg_mo[n2]+mo_esp[rgEsp_mo[n2]]; // logit(mort reussie) 
     logit_mo[n2]= oo_logit+
-                  mo_esp[rgEsp_mo[n2]]+
+                  mo_Ooesp[rgEsp_mo[n2]]+
                   onto*dbh_mo[n2]/dbhmax_mo[n2]+
                   onto_sq*pow(dbh_mo[n2]/dbhmax_mo[n2],2)+
-                  mo_clim*clim_mo[n2]+
-                  mo_logg*logg_mo[n2]; // logit(mort reussie) 
+                  (mo_clim+mo_Clesp[rgEsp_mo[n2]])*clim_mo[n2]+
+                  (mo_logg+mo_Loesp[rgEsp_mo[n2]])*logg_mo[n2]; // logit(mort reussie) 
 
   }
 }
@@ -92,8 +101,10 @@ model {                            // Model block
 //  cr_clim ~ normal(0,100);    // priors
 //  cr_logg ~ normal(0,100);    // priors
 //  sigma ~ gamma(10^2,10^2);       // priors
-  mo_sigesp ~ gamma(10^2,10^2);       // priors
-  oo_logit ~ normal(0,100);    // priors
+  mo_sigOoesp ~ normal(0,5);;       // priors
+  mo_sigClesp ~ normal(0,5);;       // priors
+  mo_sigLoesp ~ normal(0,5);;       // priors
+ oo_logit ~ normal(0,100);    // priors
 //  vig ~ normal(0,100);         // priors
   onto ~ normal(0,100);        // priors
   onto_sq ~ normal(0,100);    // priors
@@ -101,7 +112,9 @@ model {                            // Model block
   mo_logg ~ normal(0,100);   // priors
 
   for(nesp in 1:Nesp){                // priors
-    mo_esp[nesp]~normal(0,mo_sigesp);
+    mo_Ooesp[nesp]~normal(0,mo_sigOoesp);
+    mo_Clesp[nesp]~normal(0,mo_sigClesp);
+    mo_Loesp[nesp]~normal(0,mo_sigLoesp);
   }
 //  for(n1 in 1:Ncr){
 //    log(Acc_cr[n1]+1)~normal(logacc_mu_cr[n1],sigma);       // likelihood
