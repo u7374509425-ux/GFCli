@@ -1,11 +1,21 @@
 ---
 title: "Pré-traitement des données Guyafor pour le modèle GFClim WP4"
 author: "StephaneKourou"
-date: "18 octobre 2018"
+date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
-  pdf_document: default
-  html_document: default
+  html_document:
+    fig_caption: yes
+    highlight: pygments
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '5'
 ---
+
 
 <!-- Options de knitr et de R (librairies, ...) --> 
 
@@ -39,7 +49,7 @@ Un indice de stress hydrique et d'intensité d'exploitation forestière sont ég
 Un Dmax est calculé pour chaque espèce et chaque site quand les données le permettent.
 
 
-#1 Création données arbres, calcul Dmax par site et par espece 
+# 1 Création données arbres, calcul Dmax par site et par espece 
 Le fichier **Data_guyafor_16esp_Cl_join.Rdata** contient le résultat de ce script, paramètres (nbmin_arbres=0 ; nbmin_mes=3 ; an_min_meteo=1968 ; REW multisite)
 
 Le fichier **Data_guyafor_16esp_S0_to_join.Rdata** contient le résultat de ce script, paramètres (nbmin_arbres=0 ; nbmin_mes=3 ; an_min_meteo=1978)
@@ -324,7 +334,8 @@ Water0<-datamo_sc %>%
 ```
 
 
-#2 Création de l'indice de stress hydrique
+# 2 Création de l'indice de stress hydrique
+
 ## Démarche générale sur l'utilisation des données climat (pluviométrie) 
 A partir de donnée pluviométrie et de données sur des caractéristiques physiques du sol et de son fonctionnement hydrique, il est possible de calculé un indice journalier de disponibilité en eau du sol pour les arbres : le REW (Relative Extractable Water, cit. Wargner et al 2011). Un REW de 1 correspond à une disponibilité maximale, une valeur de 0 à un absence totale de disponibilité en eau. En dessous d'un REW de 0.4 on considère que les arbres souffrent de stress hydrique.
 Le calcul des REW journalier est fait par le doc "prepa_donnee/Climat/REW_gfclim/Donnees_climat_pre-traitement.Rmd"
@@ -465,8 +476,7 @@ save(datacr_cl,datamo_cl,file="data_WaterStress_guyafor.rdata") # le 17/01/2020
 ```
 
 
-
-#3 Calcul des indices de perturbation pour les parcelles exploitées.
+# 3 Calcul des indices de perturbation pour les parcelles exploitées.
 L'indice de perturbation est le pourcentage de biomasse enlevée ou morte, lors de l'exploitation, par rapport à la biomasse initiale de la parcelle.
 La valeur initiale est donnée par l'inventaire le plus récent avant exploitation, la valeur post exploitation est donnée par un inventaire quelques année après exploitation afin de prendre en compte l'effet retard de l'exploitation sur la mortalité des arbres.
 Ce délai est le paramètre YaLogg (Year after Logging). D'après les résulats de Camila Piponio-Laroche, ce temps de latence est autour de 5 ans.
@@ -478,7 +488,7 @@ Seuls les dispositifs de Paracou, Montagne Tortue et Manaré, ont de vrais inven
 Pour le BAFOG l'inventaire a été fait au mieux 26 ans après exploitation.
 Pour les parcelles Organabo et Risquetout le premier inventaire a eu lieu au mieux 8 ans après l'exploitation. Sur ces parcelles exploitée, la moitiée des parcelles ont été éclaircies et d'autres sont restées en temoins, c'est à ditre exploitées mais pas eclaircies. D'après l'ONf, la parcelle Risquetout 8 a été très peu exploité (absence totale de souches). Nous tenterons de la prendre comme référence de biomasse pré-exploitation pour les parcelles de Risquetout.
 
-##A Choix des années d'inventaire pré et post exploitation quand elles existent
+## A Choix des années d'inventaire pré et post exploitation quand elles existent
 ```{r perturbation_select_year, echo=TRUE}
 # on repart des données Guyafor de base sur les parcelle exploitées et du fichier sur les données dispositifs
 #load("dispoGuyafor2018.Rdata") # contient une table dispoGuyafor
@@ -548,7 +558,7 @@ knitr::kable(DispoLogg, digits= 1,caption="Disositif et année d'inventaire pré
 
 ```
 
-##B Calcul de l'indice par parcelle avec inventaire pré-exploitation
+## B Calcul de l'indice par parcelle avec inventaire pré-exploitation
 On utlise le Package "BIOMASS". La fonction de calcul de la biomasse, prend en entrée un genre, une espèce, un diamètre et une position en longitude et lattitude.
 
 ```{r perturbation_index, echo=TRUE,message=FALSE,warning=FALSE}
@@ -599,7 +609,7 @@ index_trait<-index_trait_mes %>%
 # hist(temp$AGB)
 ```
 
-##C Tentative d'ajout indice pour Risquetout et Organabo (non concluant)
+## C Tentative d'ajout indice pour Risquetout et Organabo (non concluant)
 Sur les parcelle de Risquetout exploitation en 1983, premier inventaire en 1999, éclaircie des parcelles en 
   P05 exploitation 1983, traitée en 1995, inventoriée en 1995
   P08 exploitation 1983, traitée en 1998, inventoriée en 1999
@@ -645,7 +655,7 @@ Leur utilisation dans le modèle est donc très délicate
 
 Au final on ne conserve que 13 pareclles sur 3 sites pour les données d'exploitation. Les parcelles de Risquetout et Organabo doivent être retiré de l'analyse pour ne pas d'être considérée comme parcelle non exploitées, de mêem que le sparcelle exploitée du BAFOG.
 
-##D Ajout indice traitement et WD aux tableaux de données croissance et mortalité
+## D Ajout indice traitement et WD aux tableaux de données croissance et mortalité
   
 ```{r perturbation_index_ajout, echo=TRUE}
 # parcele xploitée mais sans calcul d'indice passible
@@ -681,7 +691,7 @@ datamo_cl_lo<-datamo_cl %>%
 ```
 
 
-#4 Sauvegarde des tableaux de données
+# 4 Sauvegarde des tableaux de données
 
 ```{r sortie,echo=TRUE}
 save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
@@ -723,30 +733,30 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
 ```
 
 
-```{r debug_data,echo=false,warning=FALSE,message=FALSE}
+```{r debug_data,echo=FALSE,warning=FALSE,message=FALSE}
 #5 Debugages
-temp<-datamo_cl_lo %>% 
-  filter(is.na(IshInvMo)) %>% 
-  filter(Forest=="Paracou") %>% 
-  group_by(Forest,CDate2,CDate3,CDym2,CDym3) %>% 
-  summarise()
-temp2<-datamo_cl_lo %>% 
-  filter(Forest=="Paracou") %>% 
-  group_by(Forest,CDym1,CDym2,IshInvVig) %>% 
-  summarise() %>% 
-  rename(CDym2=CDym1,CDym3=CDym2) %>% 
-  semi_join(temp,by=c("CDym2","CDym3"))
-save(temp,file="pb_clim_paracou _plot.RData")
-
-temp<-datamo_cl_lo
-min(temp$IndexLogg, na.rm=TRUE)
-max(temp$IndexLogg,na.rm=T)
-median(temp$IndexLogg,na.rm=T)
-hist(temp$IshInvVig)
-hist(temp$TxLogg)
-SHcr<-(temp$IshInvVig-mean(temp$IshInvVig,na.rm=T))/sd(temp$IshInvVig,na.rm=T)
-hist(SHcr)
-Loggcr<-(temp$TxLogg-mean(temp$TxLogg,na.rm=T))/sd(temp$TxLogg,na.rm=T)
-hist(Loggcr)
+# temp<-datamo_cl_lo %>% 
+#   filter(is.na(IshInvMo)) %>% 
+#   filter(Forest=="Paracou") %>% 
+#   group_by(Forest,CDate2,CDate3,CDym2,CDym3) %>% 
+#   summarise()
+# temp2<-datamo_cl_lo %>% 
+#   filter(Forest=="Paracou") %>% 
+#   group_by(Forest,CDym1,CDym2,IshInvVig) %>% 
+#   summarise() %>% 
+#   rename(CDym2=CDym1,CDym3=CDym2) %>% 
+#   semi_join(temp,by=c("CDym2","CDym3"))
+# save(temp,file="pb_clim_paracou _plot.RData")
+# 
+# temp<-datamo_cl_lo
+# min(temp$IndexLogg, na.rm=TRUE)
+# max(temp$IndexLogg,na.rm=T)
+# median(temp$IndexLogg,na.rm=T)
+# hist(temp$IshInvVig)
+# hist(temp$TxLogg)
+# SHcr<-(temp$IshInvVig-mean(temp$IshInvVig,na.rm=T))/sd(temp$IshInvVig,na.rm=T)
+# hist(SHcr)
+# Loggcr<-(temp$TxLogg-mean(temp$TxLogg,na.rm=T))/sd(temp$TxLogg,na.rm=T)
+# hist(Loggcr)
 
 ```
