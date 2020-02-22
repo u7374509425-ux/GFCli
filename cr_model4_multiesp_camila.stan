@@ -38,7 +38,7 @@ data {                           // Data block
 parameters {
   real <lower=0.01> oo_Gmax;  // Parameter croissance : ordonnee a l'origine de Gmax
   real <lower=0> Ks;       // Parameter croissance
-  real <lower=0,upper=1.5> Dopt;    // Parameter croissance
+  real <lower=0,upper=1> Dopt;    // Parameter croissance
   real  cr_clim;           // Parameter croissance
   real  cr_logg;           // Parameter croissance
   real  cr_dmax;           // Parameter croissance
