@@ -77,8 +77,8 @@ options(mc.cores = parallel::detectCores()) # fixe le nombre de noyaux utilises.
 #defaut
 code_esp_cible<-"multiesp"
 espliste<-espGFClim
-parametres<-c(FALSE, NA,FALSE,FALSE,NA,FALSE,paste(espliste,collapse = ", "),code_esp_cible)
-names(parametres)<-c("selann","annee_u","delrecru","selsite","site","selEsp","espliste","codeEsp")
+parametres<-c(FALSE, NA,FALSE,FALSE,NA,FALSE,FALSE,NA,paste(espliste,collapse = ", "),code_esp_cible)
+names(parametres)<-c("selann","annee_u","delrecru","selsite","site","selplot","parsel","selEsp","espliste","codeEsp")
 annee_u <-sort(unique(c(datacr_cl_lo$Year1,datacr_cl_lo$Year2,datamo_cl_lo$Year1,datacr_cl_lo$Year3)))
 
 #parametres
@@ -86,10 +86,13 @@ selann<-FALSE            # si TRUE selection des annees via un vecteur ci dessou
 annee_sel <-seq(1991,2012)
 # delrecru<-TRUE         # si TRUE suppression des recruts = arbres absent du premier inventaire, necessite la tablede mesure source "tabMesuresSelect"
 
-selsite<-TRUE
+selsite<-FALSE
 # site<-c("Paracou")
 site<-c("Acarouany","BAFOG","Laussat","Montagne Plomb","Montagne Tortue","Nouragues",
 "Régina St Georges","Tibourou","Trésor") # tous sauf Paracou  soit 7% des données
+
+selplot<-TRUE # selection de quelques parcelles de Paracou
+parsel<-c("10")
 
 selEsp<-FALSE
 #esp_sel<-c("Sextonia rubra","Manilkara bidentata","Dicorynia guianensis","Goupia glabra")
@@ -97,7 +100,7 @@ esp_sel<-c("Bocoa prouacensis", "Carapa surinamensis", "Chrysophyllum sanguinole
            "Goupia glabra", "Qualea rosea", "Sextonia rubra", "Symphonia globulifera", "Virola michelii")
 
 
-code_sorties<-"s_paracou"
+code_sorties<-"paracou10"
 
 datacr_s<-datacr_cl_lo
 datamo_s<-datamo_cl_lo
@@ -125,8 +128,8 @@ tabtemp<-datamo_s%>%
 
 ##2 selection des donnees
 if (selann) {
-  parametres[1]<-selann
-  parametres[2]<-paste(as.character(min(annee_sel)),"-",as.character(max(annee_sel)))
+  parametres["selann"]<-selann
+  parametres["annee_u"]<-paste(as.character(min(annee_sel)),"-",as.character(max(annee_sel)))
   annees_u<-annee_sel
   datacr_s<-filter(datacr_s,(Year1 %in% annee_u) & (Year2 %in% annee_u))
   datamo_s<-filter(datamo_s,(Year1 %in% annee_u) & (Year2 %in% annee_u) & (Year3 %in% annee_u))
@@ -156,17 +159,26 @@ nrow(datamo_s)
 
  
 if (selsite) {
-  parametres[4]<-selsite
-  parametres[5]<-paste(site,collapse = ", ") # Colle tous les element de site sur une seule chaine de caracteres
+  parametres["selsite"]<-selsite
+  parametres["site"]<-paste(site,collapse = ", ") # Colle tous les element de site sur une seule chaine de caracteres
   datacr_s<-filter(datacr_s,Forest %in% site)
   datamo_s<-filter(datamo_s,Forest %in% site)
   code_esp_cible<-code_sorties
 }  
 
+
+if (selplot) { 
+  parametres["selplot"]<-selplot
+  parametres["parsel"]<-paste(parsel,collapse = ", ") # Colle tous les element de parsel sur une seule chaine de caracteres
+  datacr_s<-filter(datacr_s,!(Forest=="Paracou" & !(Plot %in% parsel)))
+  datamo_s<-filter(datamo_s,!(Forest=="Paracou" & !(Plot %in% parsel)))
+  code_esp_cible<-code_sorties
+}
+
 if (selEsp) {
   espliste<-esp_sel
-  parametres[6]<-selEsp
-  parametres[7]<-paste(espliste,collapse = ", ")
+  parametres["selEsp"]<-selEsp
+  parametres["espliste"]<-paste(espliste,collapse = ", ")
   code_esp_cible<-code_sorties
   datacr_s<-filter(datacr_s,idEsp %in% espliste)
   datamo_s<-filter(datamo_s,idEsp %in% espliste)
@@ -194,7 +206,7 @@ ArbresAnnee<-datacr_s%>%
   spread(key=Year1,value=Diam1)
 
 # tableau résumé espèces
-tabtemp_cr<-datacr_s%>%
+tabspe_cr<-datacr_s%>%
   #  semi_join(unrecruts,by="idTree") %>%
   group_by(idEsp,idTree) %>% 
   summarise(nbmes=n()) %>% 
@@ -202,19 +214,21 @@ tabtemp_cr<-datacr_s%>%
   summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) %>% 
   arrange(desc(nb_acc))
 
-tabtemp<-datamo_s%>%
+tabspe<-datamo_s%>%
   #  semi_join(unrecruts,by="idTree") %>%
   group_by(idEsp,idTree) %>% 
   summarise(nbmes=n()) %>% 
   group_by(idEsp) %>% 
   summarise(nbtree_mo=n(),nb_mo=sum(nbmes)) %>% 
-  left_join(tabtemp_cr,by="idEsp")
+  left_join(tabspe_cr,by="idEsp")
 
-ggplot(tabtemp, aes(x=reorder(idEsp,nb_acc),y=nb_acc))+
+ggplot(tabspe, aes(x=reorder(idEsp,nb_acc),y=nb_acc))+
   geom_bar(stat="identity")+
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.7))
 
 # tableau résumé sites
+
+
 tabforests_cr<-datacr_s%>%
   group_by(Forest,idTree) %>% 
   summarise(nbmes=n()) %>% 
@@ -233,15 +247,25 @@ ggplot(tabforests, aes(x=reorder(Forest,nb_acc),y=nb_acc))+
   geom_bar(stat="identity")+
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.7))
 
-
-# distribution des variables
-ggplot(datacr_s, aes(x=reorder(Forest,nb_acc),y=nb_acc))+
+ggplot(tabforests, aes(x=reorder(Forest,nb_mo),y=nb_mo))+
   geom_bar(stat="identity")+
   theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.7))
 
+"ratio données Paracou"
+"croissance" 
+tabforests$nb_acc[tabforests$Forest=="Paracou"]/sum(tabforests$nb_acc)
+"mortalité" 
+tabforests$nb_mo[tabforests$Forest=="Paracou"]/sum(tabforests$nb_mo)
+
+# distribution des variables
+
+par(mfrow=c(2,2))
+ hist(datacr_cl_lo$IshInv)
  hist(datacr_s$IshInv)
  hist(datacr_cl_lo$TxLogg)
-# hist(datacr_s$AGR)
+ hist(datacr_s$TxLogg)
+par(mfrow=c(1,1)) 
+hist(log(datacr_s$AGR))
 
 #### B- Calculs et ajouts des colonnes pour des effets aléatoires ####
 
@@ -351,11 +375,13 @@ save(fitj_c,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_join_vcr
 #Sys.time()- temps_depart
 #save(fitj_c,file=paste('stan_sorties/stan_',code_esp_cible,'_join_multiesp_sortie.Rdata')) # voi debut du fichier stan pour les specificite
 
-
+chain<-fitj_mocr
 
 # modèle de croissance seul ####
-pars_save<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
-             "cr_sigLoesp","cr_Gesp","cr_Clesp","cr_Loesp")
+pars_save<-c("Ks","Dopt","sigma",
+             "cr_clim","cr_Clesp","cr_sigClesp",
+             # "cr_logg","cr_sigLoesp","cr_Loesp",
+             "oo_Gmax","cr_Gesp","cr_dmax","cr_sigGesp")
 
 temps_depart <-Sys.time()
 fitj_cr <- stan('cr_model4_multiesp_camila.stan', data = dataj,pars=pars_save,include=TRUE,
@@ -371,6 +397,8 @@ save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_cami
 #  Sys.time()- temps_depart]
 #  save(fitjo,file=paste('stan_',code_esp_cible,'_joint_sortie.Rdata'))
 
+chain<-fitj_cr
+
 # modèle mortalité seul ####
 pars_save<-c("oo_logit","mo_Ooesp","onto","onto_sq","mo_clim","mo_Clesp","mo_logg","mo_Loesp","mo_sigOoesp","mo_sigClesp",
              "mo_sigLoesp")
@@ -384,41 +412,44 @@ fitj_mo <- stan('mo_model4_multiesp.stan', data = dataj,pars=pars_save,include=T
 Sys.time()- temps_depart
 save(fitj_mo,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_mo_sortie_i2.Rdata'))
 
+chain<-fitj_mo
 
-## vecteurs de paramètres  et vecteur espèces (a faire fusionner espmodel et tesp)  ####
+## vecteurs de paramètres  et vecteur espèces ####
 
-chain<-fitj_cr
-
-
+tesp<-tesp %>% 
+  transmute(especes=idEsp,nesp=rank)
 espliste<-parametres["espliste"]
 espmodel<-as.data.frame(strsplit(parametres["espliste"],", ")) # a supprimer si tesp existe
 espmodel$espliste<-as.character(espmodel$espliste)
 espmodel$nesp<-1:length(espmodel$espliste)
 
 # liste des noms des colonnes de parametres pour graphes de sortie. A limiter aux parametres  : exclure transformed parameters et generated quantities 
-# pars<-chain@model_pars
+pars<-chain@model_pars # contient aussi les "transformed parameters comme logacc_mu_cr
 
 # paste(chain@model_pars,collapse = ",") # pour sélectionner facilement les paramètre dans la console
 
-cr_Gesp_multi<-paste("cr_Gesp[",1:length(espliste),"]",sep="")
-cr_Clesp_multi<-paste("cr_Clesp[",1:length(espliste),"]",sep="")
-cr_Loesp_multi<-paste("cr_Loesp[",1:length(espliste),"]",sep="")
+cr_Gesp_multi<-paste("cr_Gesp[",1:nrow(tesp),"]",sep="")
+cr_Clesp_multi<-paste("cr_Clesp[",1:nrow(tesp),"]",sep="")
+cr_Loesp_multi<-paste("cr_Loesp[",1:nrow(tesp),"]",sep="")
 
-mo_Gesp_multi<-paste("mo_Ooesp[",1:length(espliste),"]",sep="")
-mo_Clesp_multi<-paste("mo_Clesp[",1:length(espliste),"]",sep="")
-mo_Loesp_multi<-paste("mo_Loesp[",1:length(espliste),"]",sep="")
+mo_Ooesp_multi<-paste("mo_Ooesp[",1:nrow(tesp),"]",sep="")
+mo_Clesp_multi<-paste("mo_Clesp[",1:nrow(tesp),"]",sep="")
+mo_Loesp_multi<-paste("mo_Loesp[",1:nrow(tesp),"]",sep="")
 
 pars_mo<-c("oo_logit","mo_Ooesp","onto","onto_sq","mo_clim","mo_Clesp","mo_logg","mo_Loesp","mo_sigOoesp","mo_sigClesp",
            "mo_sigLoesp")
 
 pars_cr1<-c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp")
 pars_crG<-c("oo_Gmax","cr_sigGesp",cr_Gesp_multi)
-pars_crCl<-c("cr_clim","cr_sigClesp",
-          cr_Clesp_multi)
-pars_crLogg<-c("cr_logg","cr_sigLoesp",
-            cr_Loesp_multi)
+pars_crCl<-c("cr_clim","cr_sigClesp",cr_Clesp_multi)
+pars_crLogg<-c("cr_logg","cr_sigLoesp",cr_Loesp_multi)
 
 
+pars_mo1<-c("oo_logit","onto","onto_sq")
+pars_moOo<-c("oo_logit","mo_sigOoesp",mo_Ooesp_multi)
+pars_moCl<-c("mo_clim","mo_sigClesp",mo_Clesp_multi)
+pars_moLogg<-c("mo_logg","mo_sigLoesp",mo_Loesp_multi)
+pars_mo<-unique(c(pars_mo1,pars_moOo,pars_moCl,pars_moLogg))
 
 # modèle joint sans interactions Logg climat
 # pars<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","oo_logit","vig","onto","onto_sq","mo_clim","mo_logg","sigma","cr_sigGesp","cr_sigClesp",
@@ -428,25 +459,30 @@ pars_crLogg<-c("cr_logg","cr_sigLoesp",
 #modèle de croissance sans interactions logg climat
 pars_cr<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
         "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp","lp__")
-#parametres modèle de croissance sans parametres par esp
+
+#modèle de croissance sanslogg 
+pars_cr_slo<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
+           "cr_Clesp","cr_Clesp","lp__")
+
+#modèle de croissance sans parametres par esp
 pars_cr_non_spe<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","sigma","cr_sigGesp","cr_sigClesp",
         "cr_sigLoesp","lp__")
 
 # modèle de mortalité sans interactions logg climat
 # pars <- c("Gmax", "Dopt", "Ks","cr_clim","vig","onto","onto_sq","mo_clim","sigma", "sigGt") 
 
-pars<-pars_cr
-
 
 ##1 calcul rhat ####
+print(chain, pars = pars_save) 
 print(chain, pars = pars_mo) 
-print(chain, pars = pars_cr) 
+print(chain, pars = pars_cr_slo) 
 print(chain, pars = cr_Clesp_multi) 
 
 ##2 Traces des chaines ####
-traceplot(chain, pars=c("lp__")) # plot les chaines dela vraisemblance
+traceplot(chain, pars=c("lp__","Ks","Dopt","sigma")) # plot les chaines dela vraisemblance
 
 traceplot(chain, pars=pars, nrow=4) # nrow : nombre de lignes de graphe
+traceplot(chain, pars=pars_moLogg, nrow=4) # nrow : nombre de lignes de graphe
 # mcmc_trace(as.array(chain), pars = c(pars),facet_args = list(labeller = label_parsed))
 # mcmc_trace(as.array(chain), pars = c(pars),facet_args = list(labeller = label_parsed),window =c(1,700))
 
@@ -456,8 +492,8 @@ chain_df<-as.data.frame(chain)
 chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
 chain_df$iterations<-rep(1:1000,4)
 chain_sel<-chain_df %>% 
-  filter(chaines!="2") %>% 
-  filter (chaines !=3) 
+  filter(chaines!=1) %>% 
+  filter (chaines!=4) 
   # select(-starts_with("logacc_mu_cr")) %>% 
   # select(-starts_with("logacc_mu_mo")) %>% 
   # select(-starts_with("logit_mo")) %>% 
@@ -472,11 +508,21 @@ chain_ggpl<-chain_sel %>%
   mutate(nesp=ifelse(test==1,as.numeric(substr(variables,nchar(variables)-1,nchar(variables)-1)),
                      ifelse(test==2,as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)),
                             -1))) %>% 
-  left_join(espmodel,by="nesp") %>% # ajout nom complet espèce 
-  mutate(especes=ifelse(is.na(espliste),variables,espliste)) %>% 
-  select(-test,-espliste)
+  select(-test) %>% 
+  left_join(tesp,by="nesp") %>% # ajout nom complet espèce 
+  mutate(especes_var=especes, idtemp=paste(chaines,iterations,variables))
 
+ # mutate(especes_var=ifelse(is.na(especes),variables,especes) affecte, si is.na=FALSE, la valeur du level de espèce 
+ # au lieu d'affecter la chaine de caractère
+temp<-chain_ggpl %>% 
+  filter(is.na(especes)) %>% 
+  mutate(especes_var=variables)
 
+chain_ggpl<-chain_ggpl %>% 
+  filter(!is.na(especes)) %>% 
+  bind_rows(temp) %>% 
+  arrange(chaines,iterations,nesp,variables)
+  
 # chain_ggpl<-chain_sel %>% 
 #   pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" ) %>% 
 #   filter(variables %in% pars)
@@ -493,7 +539,7 @@ ggplot(chain_ggpl) +
 
 mcmc_pairs(as.array(chain), pars = pars1)
 mcmc_pairs(as.array(chain), pars = parsG)
-mcmc_pairs(as.array(chain), pars = parsCl)
+mcmc_pairs(as.array(chain), pars = pars_crCl)
 mcmc_pairs(as.array(chain), pars = parcLogg)
 # GGally::ggpairs() pour faire des pairs plus lisibles
 
@@ -507,38 +553,37 @@ mcmc_pairs(as.array(chain), pars = parcLogg)
 #mcmc_areas(as.array(chain), prob = 0.8,pars = pars)
 # mcmc_areas(as.array(chain), prob = 0.8,pars = pars1)
 mcmc_areas(as.array(chain), prob = 0.8,pars = parsG)
-mcmc_areas(as.array(chain), prob = 0.8,pars = parsCl)
+mcmc_areas(as.array(chain), prob = 0.8,pars = pars_crCl)
 mcmc_areas(as.array(chain), prob = 0.8,pars = parsLogg[1:3])
 mcmc_areas(as.array(chain), prob = 0.8,pars = parsLogg[4:6])
 
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp"))
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("oo_Gmax","cr_sigGesp","Ks"))
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("Dopt"))
+mcmc_areas(as.array(chain), prob = 0.8,pars = c("Ks"))
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("cr_dmax"))
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("sigma"))
 
-ggplot(chain_ggpl %>% filter(variables%in%parsG)) + 
+ggplot(chain_ggpl %>% filter(variables%in%pars)) + 
   geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
   xlab("Parametres OO de G") +
   geom_vline(xintercept = 0, linetype = "solid")+
-  facet_wrap(~especes)
+  facet_wrap(~especes_var)
 
-ggplot(chain_ggpl %>% filter(variables%in%parsCl)) + 
+ggplot(chain_ggpl %>% filter(variables%in%pars_crCl)) + 
   geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
   xlab("Parametres Climat") +
   geom_vline(xintercept = 0, linetype = "solid")+
-  facet_wrap(~especes)
+  facet_wrap(~especes_var)
 
 ggplot(filter(chain_ggpl,variables%in%parsLogg)) + 
   geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
   xlab("Parametres Logg") +
   geom_vline(xintercept = 0, linetype = "solid")+
-  facet_wrap(~especes)
+  facet_wrap(~especes_var)
 #launch_shinystan(chain)
 
-#### D- Predictions et graphe de sortie  afaire prévision par espèce et par classe d'indice de climat####
-temp<-chain_sel %>%   # on reprends le tableau avec seulement les "bonnes " chaines
-  select(-chaines,-iterations)
+#### D- Predictions et graphe de sortie A FAIRE prévision par espèce et par classe d'indice de climat####
 
 donnee_cr<-as.data.frame(dataj[c(5,7,10,12,16,18,20,22)]) #ensemble des donnees liees au modele de croissance
 donnee_mo<-as.data.frame(dataj[-c(1:5,7,10,12,16,18,20,22)]) #donnees du modele de mortalité
@@ -548,6 +593,8 @@ donnee_cr<-donnee_cr %>% left_join(transmute(tesp,idEsp=idEsp,rgEsp_cr=rank),by=
 Nesp<-donnee_cr$rgEsp_cr
 
 ###1 calcul des prédiction pour chaque observé ####
+temp<-chain_sel %>%   # on reprends le tableau avec seulement les "bonnes " chaines
+  select(-chaines,-iterations)
 param<-apply(temp,2,median) # on extrait les médianes des paramètres
 names(param)<-colnames(temp)
 
@@ -571,6 +618,8 @@ ggplot(donnee_cr) +
 
 
 ###2 calcul de prévision et erreur pour diamètre (ontogénie) donné par espèce et sur un range de variables climatiques ####
+
+## Fonctions de prédictions
 # pour accélérer la boucle, stocker 1000 tirages de rnorm dans un vecteur 
 # et ensuite aller chercher les valeurs dans ce vecteur
 
@@ -585,40 +634,54 @@ Fpred_cr<-function(i,vparamj,ontos,datamed,sigmas){
 }
 
 
-Fpred_cr_spe<-function(i,vparamj,ontos,datamed,sigmas,nesp){
+Fpred_cr_spe<-function(i,vparamj,ontos,datamed,dataspe,sigmas,nesp){
+  #vparamj : vecteur de paramètres ( longueur =100*nb chaine =40000)
+  #ontos : abscisse du graph : ratio diam/dmax = ontogénie
+  #datamed : mediane des varaibles explicatives non dpdte de l'espèce : clim, logg
+  #dataspe : varaible explicatie dépendante de l'espèce : dbhmax, WD
+  #sigmas : tableau de valeur tiré dans les loi normale des effet aléatoir et de l'erreiur du modèle
+  #nesp : numéro d'espèce (rang dans la liste des espèces)
   return (as.numeric(vparamj["oo_Gmax"])+
             vparamj[paste("cr_Gesp[",nesp,"]",sep="")]+
             as.numeric(sigmas[i,]["cr_sigGesp"])+
-            as.numeric(vparamj["cr_dmax"])*datamed["dbhmax_cr"]+
-            (as.numeric(vparamj["cr_clim"])+
+            as.numeric(vparamj["cr_dmax"])*dataspe[dataspe$rgEsp_cr==nesp,"dbhmaxspe_cr"]+
+           # (as.numeric(vparamj["cr_logg"])+
+           #       vparamj[paste("cr_Loesp[",nesp,"]",sep="")]+
+           #       as.numeric(sigmas[i,]["cr_sigLoesp"]))*datamed["logg_cr"]+
+           (as.numeric(vparamj["cr_clim"])+
                  vparamj[paste("cr_Clesp[",nesp,"]",sep="")]+
-                 as.numeric(sigmas[i,]["cr_sigClesp"]))*datamed["clim_cr"]+
-            (as.numeric(vparamj["cr_logg"])+
-                 vparamj[paste("cr_Loesp[",nesp,"]",sep="")]+
-                 as.numeric(sigmas[i,]["cr_sigLoesp"]))*datamed["logg_cr"])*
-    exp((-0.5)*(log(onto[i]/as.numeric(vparamj["Dopt"]))/(as.numeric(vparamj["Ks"])*datamed["WD_cr"]))*
-          (log(onto[i]/as.numeric(vparamj["Dopt"]))/(as.numeric(vparamj["Ks"])*datamed["WD_cr"])))+
-    sigmas[i,]["sigma"]
+                 as.numeric(sigmas[i,]["cr_sigClesp"]))*datamed["clim_cr"]
+          )*
+          exp((-0.5)*(log(onto[i]/as.numeric(vparamj["Dopt"]))/
+                        (as.numeric(vparamj["Ks"])*dataspe[dataspe$rgEsp_cr==nesp,"WDspe_cr"]))*
+                     (log(onto[i]/as.numeric(vparamj["Dopt"]))/
+                         (as.numeric(vparamj["Ks"])*dataspe[dataspe$rgEsp_cr==nesp,"WDspe_cr"]))
+              )+
+          sigmas[i,]["sigma"]
 }
 
 
-
+## tableau d'initialisation 
 vparam<-chain_sel %>% 
   select(-lp__) %>% 
   slice(50:100)
 
+onto<-seq(0.08,2,by=0.08) #abscisse pour calcul du modèle"
+
 datamed<-apply(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variables
 names(datamed)<-colnames(select(donnee_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr))
 
-onto<-seq(0.08,2,by=0.08) #abscisse pour calcul du modèle"
-
+dataspe<-select(donnee_cr,dbhmax_cr,WD_cr,rgEsp_cr) %>% # tableau des variables dpdtes de l'espèce
+  group_by(rgEsp_cr) %>% 
+  summarise(WDspe_cr=median(WD_cr),dbhmaxspe_cr=median(dbhmax_cr))
+  
 repet<-10 # répétitions par ligne de paramètre et par abscisse (onto)
 nn<-length(onto)*repet # nombre de simulations pour un jeu de paramètres 
 abscisses<-rep(onto,each=repet) # abscisses pour une valeur de paramètres
 
-i<-1
-j<-1
-k<-1
+# i<-1
+# j<-1
+# k<-1
 Nesp<-2
 temps_depart<-Sys.time()
 pred_pparam<-matrix(data=NA,nrow=nn,ncol=0)
@@ -627,12 +690,14 @@ for(j in 1:nrow(vparam)){
   srt<-rep(NA,nn)
   cr_sigGesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigGesp"]))
   cr_sigClesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigClesp"]))
-  cr_sigLoesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigLoesp"]))
+  # cr_sigLoesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigLoesp"]))
   sigma<-rnorm(nn,mean=0,as.numeric(vparam[j,]["sigma"]))
-  sig<-data.frame(cr_sigGesp,cr_sigClesp,cr_sigLoesp,sigma)
+  sig<-data.frame(cr_sigGesp,cr_sigClesp,
+                  # cr_sigLoesp,
+                  sigma)
     for(k in 1:Nesp){
       for (i in 1:nn){
-        srt[i]<-Fpred_cr_spe(i,vparam[j,],ontos,datamed,sig,k)
+        srt[i]<-Fpred_cr_spe(i,vparam[j,],ontos,datamed,dataspe,sig,k)
       }
     
   # srt<-lapply(X=1:nn, FUN=Fpred_cr(,vparam[j,],abscisses,datamed,sig))
@@ -657,8 +722,7 @@ pred_pc<-pred_pc%>%
     # names_ptypes=list(param=integer()),# pour tranformer les titre de colonne parame en entier
     values_to = "predictions") %>% 
   mutate(nesp=as.numeric(substr(num_param,nchar(num_param),nchar(num_param)))) %>% 
-  left_join(espmodel,by="nesp") %>% 
-  rename(especes=espliste) %>% 
+  left_join(tesp,by="nesp") %>% 
   arrange(nesp,abscisses)
 
 pred_pc$predictions<-unlist(pred_pc$predictions)
@@ -685,59 +749,12 @@ ggplot(pred_pc) +
 
 
 
-par(mfrow=c(1,1))
-Dplot<-dataj[["dbh_cr"]]
-Accplot<-dataj[["Acc_cr"]]
-plot(x=Dplot,y=Accplot) # observation accroissement : il faut borner éventuellement le paramètre Gmax et Dopt en fonction de ce nuage
-points(x=Dplot,y=pred_cr,col="blue")
-
-
-par(mfrow=c(1,2))
-Dplot<-dataj[["dbh_cr"]][dataj[["rgEsp_cr"]]==1]/dataj[["dbhmax_cr"]][dataj[["rgEsp_cr"]]==1]
-Accplot<-dataj[["Acc_cr"]][dataj[["rgEsp_cr"]]==1]
-plot(x=Dplot,y=Accplot) # observation accroissement : il faut borner éventuellement le paramètre Gmax et Dopt en fonction de ce nuage
-points(x=Dplot,y=pred_cr[dataj[["rgEsp_cr"]]==1],col="blue")
-
-Dplot<-dataj[["dbh_cr"]][dataj[["rgEsp_cr"]]==2]/dataj[["dbhmax_cr"]][dataj[["rgEsp_cr"]]==2]
-Accplot<-dataj[["Acc_cr"]][dataj[["rgEsp_cr"]]==2]
-points(x=Dplot,y=Accplot,col="red") # observation accroissement : il faut borner éventuellement le paramètre Gmax et Dopt en fonction de ce nuage
-points(x=Dplot,y=pred_cr[dataj[["rgEsp_cr"]]==2],col="blue")
 
 
 
 
 
 
-
-#chain_pred<- chain_mat %>%  # si effet aléatoire autant de colonne que d'observations * 4000 lignes
-#  select(starts_with("predacc1"))
-
-pars_median<-apply(as.matrix(chain_pars),2,median)
-
-diam_ini<-dataj[["dbh1"]]
-obs1<-dataj[["Acc1"]]
-
-#logacc_mu_cr[n1] = (oo_Gmax+cr_Clesp[rgEsp_cr[n1]]+cr_clim*clim_cr[n1]+cr_logg*logg_cr[n1])*exp ((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*(Dopt+cr_Desp[rgEsp_cr[n1]])))/Ks,2)); // obligation de faire un boucle sinon erreur de la fonction pow()
-
-mod<-pars_median["Gmax"]*exp(-0.5*(log(diam_ini/pars_median["Dopt"])/pars_median["Ks"])^2)
-mod<-exp(mod)-1
-
-
-
-plot(x = diam_ini,y=obs1)
-#points(x = diam_ini,y=pred1,col="red")
-points(x = diam_ini,y=mod,col="blue")
-
-
-
-chain_mat<-as.matrix(chain) # lignes : les 1000 derniere valeur des 4 chaines, colonnes : les parametres + lp__ ( vraisemblance)+ les Nt effet aleatoire de Gt, puis les Nt *nb generated quantities soit pres de 12000 colonnes 
-chain_pars <- chain_mat[, pars] # selection des colonnes parametres
-pars_mat<-dimnames(chain_mat)[[2]]
-crmu1<-pars_mat[which("cr_mu1" %in% pars_mat[])]
-nb_crmu1<-grep("cr_mu1",pars_mat)
-
-predict <- function(dbh,var1) 
-  (pars_opt["Gmax"]+pars_opt["cr_clim"]*var1)*exp(-0.5*(log(dbh/pars_opt["Dopt"])/pars_opt["Ks"])^2)
 
 datacr_gg<-as.data.frame(cbind(datacr,AGR1))
 ggplot(datacr_gg, aes(diam_1, log(AGR1+1))) +
