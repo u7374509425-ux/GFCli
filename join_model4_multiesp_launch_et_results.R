@@ -91,14 +91,14 @@ site<-c("Acarouany","BAFOG","Laussat","Montagne Plomb","Montagne Tortue","Nourag
 "Régina St Georges","Tibourou","Trésor") # tous sauf Paracou  soit 7% des données
 
 selparacou<-TRUE # selection de quelques données de Paracou avec élimination des recruts
-parparapc<-20 #pourcentage final de donnée e de paracou
+parparapc<-30 #pourcentage final de donnée e de paracou
 
 selEsp<-FALSE
 #esp_sel<-c("Sextonia rubra","Manilkara bidentata","Dicorynia guianensis","Goupia glabra")
 esp_sel<-c("Bocoa prouacensis", "Carapa surinamensis", "Chrysophyllum sanguinolentum", "Dicorynia guianensis",
            "Goupia glabra", "Qualea rosea", "Sextonia rubra", "Symphonia globulifera", "Virola michelii")
 
-code_sorties<-"paracou20%"
+code_sorties<-"paracou30%"
 
 datacr_s<-datacr_cl_lo
 datamo_s<-datamo_cl_lo
@@ -162,29 +162,29 @@ nrow(datamo_s)
 if (selparacou) { 
   parametres["selparacou"]<-selparacou
   parametres["parparapc"]<-parparapc 
+  code_esp_cible<-code_sorties
   
-  # calcul des nb de mesure totaux et par arbres sur les autres sites
+  #calcul des nb de mesure totaux et par arbres sur les autres sites
   rtreemes_cr<-datacr_s%>%
     filter(Forest!="Paracou") %>% 
-    group_by(idEsp,idTree) %>% 
+    group_by(idTree) %>% 
     summarise(nbmes=n()) %>% 
-    group_by(idEsp) %>% 
-    summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) 
+    summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) %>% 
+    mutate(rmes_cr=round(nb_acc/nbtree_cr))
   
   rtreemes<-datamo_s%>%
     filter(Forest!="Paracou") %>% 
-    group_by(idEsp,idTree) %>% 
+    group_by(idTree) %>% 
     summarise(nbmes=n()) %>% 
-    group_by(idEsp) %>% 
     summarise(nbtree_mo=n(),nb_mo=sum(nbmes)) %>% 
-    left_join(tabtemp_cr,by="idEsp") %>% 
-    summarise(nbtree_mo=sum(nbtree_mo),nb_mo=sum(nb_mo),nbtree_cr=sum(nbtree_cr),nb_acc=sum(nb_acc)) %>% 
-    mutate(rmes_mo=round(nb_mo/nbtree_mo),rmes_cr=round(nb_acc/nbtree_cr))
+    mutate(rmes_mo=round(nb_mo/nbtree_mo)) %>% 
+    bind_cols(rtreemes_cr) 
+ 
   #calcul du nombre d'individus de paracou
   paratree_cr<-round(rtreemes$nb_acc*parparapc/100/rtreemes$rmes_cr)
   paratree_mo<-round(rtreemes$nb_mo*parparapc/100/rtreemes$rmes_mo)
   
-# selection des arbres de paracou 
+  #selection des arbres de paracou 
   Treeselpara_cr<-datacr_s %>%
     filter(Forest=="Paracou") %>% 
     group_by(idTree) %>% 
@@ -201,20 +201,27 @@ if (selparacou) {
   
   # choix des arbres de paracou 
  
-  ligne_cr<-runif(paratree_cr,1,nrow(Treeselpara_cr))  
+  ligne_cr<-unique(runif(paratree_cr,1,nrow(Treeselpara_cr)))  # unique pour eviter les doublons car tirage avec remise
+  ligne_cr<-unique(c(ligne_cr,runif(paratree_cr-length(ligne_cr),1,nrow(Treeselpara_cr))))  
   Treeselpara_cr<-Treeselpara_cr %>% slice(ligne_cr)
-  ligne_mo<-runif(paratree_mo,1,nrow(Treeselpara_mo))  
+  
+  ligne_mo<-unique(runif(paratree_mo,1,nrow(Treeselpara_mo)))  
+  ligne_mo<-unique(c(ligne_mo,runif(paratree_mo-length(ligne_mo),1,nrow(Treeselpara_mo))))  
   Treeselpara_mo<-Treeselpara_mo %>% slice(ligne_mo)
 
   # selection des données
   datacr_par<-datacr_s %>% semi_join(Treeselpara_cr,by="idTree")
        # length(unique(datacr_par$idTree))
-   ligne_cr_mes<-runif(rtreemes$nb_acc*parparapc/100,1,nrow(datacr_par))  
+   ligne_cr_mes<-unique(runif(rtreemes$nb_acc*parparapc/100,1,nrow(datacr_par)))  
+   ligne_cr_mes<-unique(c(ligne_cr_mes,
+                          runif((rtreemes$nb_acc*parparapc/100)-length(ligne_cr_mes),1,nrow(datacr_par))))  
    datacr_par<-datacr_par %>% slice(ligne_cr_mes) # choix parmis toutes les mesures, esperance nbmes/tree correct
 
   datamo_par<-datamo_s %>% semi_join(Treeselpara_mo,by="idTree")
        # length(unique(datamo_par$idTree))
-  ligne_mo_mes<-runif(rtreemes$nb_mo*parparapc/100,1,nrow(datamo_par))  
+  ligne_mo_mes<-unique(runif(rtreemes$nb_mo*parparapc/100,1,nrow(datamo_par)))  
+  ligne_mo_mes<-unique(c(ligne_mo_mes,
+                         runif((rtreemes$nb_mo*parparapc/100)-length(ligne_mo_mes),1,nrow(datamo_par))))  
   datamo_par<-datamo_par %>% slice(ligne_mo_mes)
   
  
@@ -901,7 +908,7 @@ ggplot(pred_pc1 %>% filter(especes=="Carapa surinamensis")) +
 
 ggplot(pred_pc1,aes(x=Ontos,y=Clims))+
   geom_raster(aes(fill=mediane))+
-  geom_contour(aes(z=)
+  geom_contour(aes(z=))
   facet_wrap(~especes)
   
   geom_line (aes(x=ontos,y=pc01),color="grey",size=0.5,linetype = "dashed") +
