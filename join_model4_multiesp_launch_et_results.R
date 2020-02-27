@@ -76,8 +76,8 @@ options(mc.cores = parallel::detectCores()) # fixe le nombre de noyaux utilises.
 #defaut
 code_esp_cible<-"multiesp"
 espliste<-espGFClim
-parametres<-c(FALSE, NA,FALSE,FALSE,NA,FALSE,FALSE,NA,paste(espliste,collapse = ", "),code_esp_cible)
-names(parametres)<-c("selann","annee_u","delrecru","selsite","site","selparacou","parparapc","selEsp","espliste","codeEsp")
+parametres<-c(FALSE, NA,FALSE,FALSE,NA,FALSE,FALSE,NA,paste(espliste,collapse = ", "),code_esp_cible,FALSE)
+names(parametres)<-c("selann","annee_u","delrecru","selsite","site","selparacou","pcpara","selEsp","espliste","codeEsp","sellogg")
 annee_u <-sort(unique(c(datacr_cl_lo$Year1,datacr_cl_lo$Year2,datamo_cl_lo$Year1,datacr_cl_lo$Year3)))
 
 #parametres
@@ -91,14 +91,16 @@ site<-c("Acarouany","BAFOG","Laussat","Montagne Plomb","Montagne Tortue","Nourag
 "Régina St Georges","Tibourou","Trésor") # tous sauf Paracou  soit 7% des données
 
 selparacou<-TRUE # selection de quelques données de Paracou avec élimination des recruts
-parparapc<-30 #pourcentage final de donnée e de paracou
+pcpara<-40 #pourcentage final de donnée e de paracou
 
 selEsp<-FALSE
 #esp_sel<-c("Sextonia rubra","Manilkara bidentata","Dicorynia guianensis","Goupia glabra")
 esp_sel<-c("Bocoa prouacensis", "Carapa surinamensis", "Chrysophyllum sanguinolentum", "Dicorynia guianensis",
            "Goupia glabra", "Qualea rosea", "Sextonia rubra", "Symphonia globulifera", "Virola michelii")
 
-code_sorties<-"paracou30%"
+sellogg<-TRUE # exclusion des dispositifs sans exploitation
+
+code_sorties<-"paracou40_logg"
 
 datacr_s<-datacr_cl_lo
 datamo_s<-datamo_cl_lo
@@ -159,11 +161,31 @@ if (selEsp) {
 nrow(datacr_s)
 nrow(datamo_s)
 
+if (sellogg) {
+  parametres["sellogg"]<-sellogg
+  Fologg<-datacr_s %>% 
+    select(Forest,IndexLogg) %>% 
+    bind_rows(select(datamo_s,Forest,IndexLogg)) %>% 
+    group_by(Forest) %>% 
+    summarise(sumIlogg=sum(na.omit(IndexLogg))) %>% 
+    filter(sumIlogg>0)
+  datacr_s<-datacr_s %>% 
+    semi_join(Fologg,by="Forest") 
+  datamo_s<-datamo_s %>% 
+    semi_join(Fologg,by="Forest")
+  
+  code_esp_cible<-code_sorties
+}  
+
+"après sellogg"
+nrow(datacr_s)
+nrow(datamo_s)
+
+
 if (selparacou) { 
   parametres["selparacou"]<-selparacou
-  parametres["parparapc"]<-parparapc 
+  parametres["pcpara"]<-pcpara 
   code_esp_cible<-code_sorties
-  
   #calcul des nb de mesure totaux et par arbres sur les autres sites
   rtreemes_cr<-datacr_s%>%
     filter(Forest!="Paracou") %>% 
@@ -179,10 +201,14 @@ if (selparacou) {
     summarise(nbtree_mo=n(),nb_mo=sum(nbmes)) %>% 
     mutate(rmes_mo=round(nb_mo/nbtree_mo)) %>% 
     bind_cols(rtreemes_cr) 
+  
+  if (rtreemes$nb_acc/nrow(datacr_s)<(100-pcpara)/100){
  
   #calcul du nombre d'individus de paracou
-  paratree_cr<-round(rtreemes$nb_acc*parparapc/100/rtreemes$rmes_cr)
-  paratree_mo<-round(rtreemes$nb_mo*parparapc/100/rtreemes$rmes_mo)
+  paratree_cr<-round((rtreemes$nb_acc)*pcpara/(100-pcpara)/rtreemes$rmes_cr)
+  paratree_mo<-round(rtreemes$nb_mo*pcpara/(100-pcpara)/rtreemes$rmes_mo)
+  parames_cr<-paratree_cr*rtreemes$rmes_cr
+  parames_mo<-paratree_mo*rtreemes$rmes_mo
   
   #selection des arbres de paracou 
   Treeselpara_cr<-datacr_s %>%
@@ -211,29 +237,32 @@ if (selparacou) {
 
   # selection des données
   datacr_par<-datacr_s %>% semi_join(Treeselpara_cr,by="idTree")
-       # length(unique(datacr_par$idTree))
-   ligne_cr_mes<-unique(runif(rtreemes$nb_acc*parparapc/100,1,nrow(datacr_par)))  
+   ligne_cr_mes<-unique(runif(parames_cr,1,nrow(datacr_par)))  
    ligne_cr_mes<-unique(c(ligne_cr_mes,
-                          runif((rtreemes$nb_acc*parparapc/100)-length(ligne_cr_mes),1,nrow(datacr_par))))  
+                          runif(parames_cr-length(ligne_cr_mes),1,nrow(datacr_par))))  
    datacr_par<-datacr_par %>% slice(ligne_cr_mes) # choix parmis toutes les mesures, esperance nbmes/tree correct
 
-  datamo_par<-datamo_s %>% semi_join(Treeselpara_mo,by="idTree")
-       # length(unique(datamo_par$idTree))
-  ligne_mo_mes<-unique(runif(rtreemes$nb_mo*parparapc/100,1,nrow(datamo_par)))  
-  ligne_mo_mes<-unique(c(ligne_mo_mes,
-                         runif((rtreemes$nb_mo*parparapc/100)-length(ligne_mo_mes),1,nrow(datamo_par))))  
-  datamo_par<-datamo_par %>% slice(ligne_mo_mes)
+   # test<-datacr_par %>% 
+   #   group_by(idTree) %>% 
+   #   summarise(nb_acc=n())
+   # median(test$nb_acc)
+  
+   datamo_par<-datamo_s %>% semi_join(Treeselpara_mo,by="idTree")
+   ligne_mo_mes<-unique(runif(parames_mo,1,nrow(datamo_par)))  
+   ligne_mo_mes<-unique(c(ligne_mo_mes,
+                         runif(parames_mo-length(ligne_mo_mes),1,nrow(datamo_par))))  
+   datamo_par<-datamo_par %>% slice(ligne_mo_mes)
   
  
   # ajout des donnée de Paracou
-datacr_s<-datacr_s %>% 
-  filter(Forest!="Paracou") %>% 
-  bind_rows(datacr_par) 
+  datacr_s<-datacr_s %>% 
+    filter(Forest!="Paracou") %>% 
+    bind_rows(datacr_par) 
 
-datamo_s<-datamo_s %>% 
-  filter(Forest!="Paracou") %>% 
-  bind_rows(datamo_par) 
-
+  datamo_s<-datamo_s %>% 
+    filter(Forest!="Paracou") %>% 
+   bind_rows(datamo_par) 
+  }
 }
 
 "après selparacou"
@@ -320,6 +349,8 @@ par(mfrow=c(2,2))
  hist(datacr_s$TxLogg)
 par(mfrow=c(1,1)) 
 hist(log(datacr_s$AGR))
+
+code_esp_cible
 
 #### B- Calculs et ajouts des colonnes pour des effets aléatoires ####
 
@@ -415,6 +446,7 @@ points(x=Dplot,y=Accplot,col="green")
 ##2 lancement des chaines ####
 # modèle complet ####
 temps_depart <-Sys.time()
+temps_depart
 fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4)
 Sys.time()- temps_depart
 save(fitj_c,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_join_vcr_sortie.Rdata')) # voi debut du fichier stan pour les specificite
@@ -439,6 +471,7 @@ pars_save<-c("Ks","Dopt","sigma",
              "oo_Gmax","cr_Gesp","cr_dmax","cr_sigGesp")
 
 temps_depart <-Sys.time()
+temps_depart
 fitj_cr <- stan('cr_model4_multiesp_camila.stan', data = dataj,pars=pars_save,include=TRUE,
                 chain=4,
                 iter=4000,warmup=3000,
@@ -450,11 +483,12 @@ save(fitj_cr,parametres,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_cami
 chain<-fitj_cr
 
 # modèle mortalité seul ####
-pars_save<-c("oo_logit","mo_Ooesp","onto","onto_sq","mo_clim","mo_Clesp","mo_logg","mo_Loesp","mo_sigOoesp","mo_sigClesp",
-             "mo_sigLoesp")
+pars_save<-c("oo_logit","mo_Ooesp","onto","onto_sq","mo_clim","mo_Clesp","mo_logg","mo_Loesp","mo_int","mo_Inesp","mo_sigOoesp","mo_sigClesp",
+             "mo_sigLoesp","mo_sigInesp")
 
 temps_depart <-Sys.time()
-fitj_mo <- stan('mo_model4_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
+temps_depart
+fitj_mo <- stan('mo_model5_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
                 chain=4,
                 iter=2000,warmup=1000,
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
@@ -466,17 +500,10 @@ chain<-fitj_mo
 
 ## vecteurs de paramètres  et vecteur espèces ####
 
-tesp<-tesp %>% 
-  transmute(especes=idEsp,nesp=rank)
-espliste<-parametres["espliste"]
-espmodel<-as.data.frame(strsplit(parametres["espliste"],", ")) # a supprimer si tesp existe
-espmodel$espliste<-as.character(espmodel$espliste)
-espmodel$nesp<-1:length(espmodel$espliste)
+tesp<-tesp %>% transmute(especes=idEsp,nesp=rank)
 
 # liste des noms des colonnes de parametres pour graphes de sortie. A limiter aux parametres  : exclure transformed parameters et generated quantities 
 pars<-chain@model_pars # contient aussi les "transformed parameters comme logacc_mu_cr
-
-# paste(chain@model_pars,collapse = ",") # pour sélectionner facilement les paramètre dans la console
 
 cr_Gesp_multi<-paste("cr_Gesp[",1:nrow(tesp),"]",sep="")
 cr_Clesp_multi<-paste("cr_Clesp[",1:nrow(tesp),"]",sep="")
@@ -489,13 +516,14 @@ mo_Loesp_multi<-paste("mo_Loesp[",1:nrow(tesp),"]",sep="")
 pars_mo<-c("oo_logit","mo_Ooesp","onto","onto_sq","mo_clim","mo_Clesp","mo_logg","mo_Loesp","mo_sigOoesp","mo_sigClesp",
            "mo_sigLoesp")
 
-pars_cr1<-c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp")
+pars_cr1<-c("oo_Gmax","Ks","Dopt","cr_dmax","cr_clim","cr_logg","sigma","cr_sigGesp","cr_sigClesp","cr_sigLoesp")
 pars_crG<-c("oo_Gmax","cr_sigGesp",cr_Gesp_multi)
 pars_crCl<-c("cr_clim","cr_sigClesp",cr_Clesp_multi)
 pars_crLogg<-c("cr_logg","cr_sigLoesp",cr_Loesp_multi)
 
 
-pars_mo1<-c("oo_logit","onto","onto_sq")
+pars_mo1<-c("oo_logit","onto","onto_sq","mo_clim","mo_logg","mo_sigOoesp","mo_sigClesp","mo_sigLoesp")
+pars_mo11<-c("oo_logit","onto","onto_sq","mo_clim","mo_logg")
 pars_moOo<-c("oo_logit","mo_sigOoesp",mo_Ooesp_multi)
 pars_moCl<-c("mo_clim","mo_sigClesp",mo_Clesp_multi)
 pars_moLogg<-c("mo_logg","mo_sigLoesp",mo_Loesp_multi)
@@ -533,7 +561,15 @@ traceplot(chain, pars=c("lp__")) # plot les chaines dela vraisemblance
 traceplot(chain, pars=c("lp__","Ks","Dopt","sigma")) # plot les chaines dela vraisemblance
 
 traceplot(chain, pars=pars, nrow=4) # nrow : nombre de lignes de graphe
-traceplot(chain, pars=pars_moLogg, nrow=4) # nrow : nombre de lignes de graphe
+
+
+
+traceplot(chain, pars=pars_mo1, nrow=5) # nrow : nombre de lignes de graphe
+traceplot(chain, pars=pars_moOo, nrow=5) # nrow : nombre de lignes de graphe
+traceplot(chain, pars=pars_moCl, nrow=5) # nrow : nombre de lignes de graphe
+traceplot(chain, pars=pars_moLogg, nrow=5) # nrow : nombre de lignes de graphe
+
+
 # mcmc_trace(as.array(chain), pars = c(pars),facet_args = list(labeller = label_parsed))
 # mcmc_trace(as.array(chain), pars = c(pars),facet_args = list(labeller = label_parsed),window =c(1,700))
 
@@ -542,9 +578,9 @@ traceplot(chain, pars=pars_moLogg, nrow=4) # nrow : nombre de lignes de graphe
 chain_df<-as.data.frame(chain) 
 chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
 chain_df$iterations<-rep(1:1000,4)
-chain_sel<-chain_df %>% 
-  filter(chaines!=2) %>% 
-  filter (chaines!=4) 
+chain_sel<-chain_df 
+  # filter(chaines!=2) %>% 
+  # filter (chaines!=4) 
   # select(-starts_with("logacc_mu_cr")) %>% 
   # select(-starts_with("logacc_mu_mo")) %>% 
   # select(-starts_with("logit_mo")) %>% 
@@ -594,6 +630,11 @@ mcmc_pairs(as.array(chain), pars = pars_crCl)
 mcmc_pairs(as.array(chain), pars = parcLogg)
 # GGally::ggpairs() pour faire des pairs plus lisibles
 
+mcmc_pairs(as.array(chain), pars = pars_mo11)
+mcmc_pairs(as.array(chain), pars = pars_mo1)
+mcmc_pairs(as.array(chain), pars = pars_moOo)
+mcmc_pairs(as.array(chain), pars = pars_moCl)
+mcmc_pairs(as.array(chain), pars = pars_moLogg1)
 
 
 ##6 Posteriors ####
@@ -616,19 +657,28 @@ mcmc_areas(as.array(chain), prob = 0.8,pars = c("cr_dmax"))
 mcmc_areas(as.array(chain), prob = 0.8,pars = c("sigma"))
 
 # ggplot(chain_ggpl %>% filter(variables%in%pars)) + 
+
 ggplot(chain_ggpl) + 
   geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
   xlab("Parametres OO de G") +
   geom_vline(xintercept = 0, linetype = "solid")+
   facet_wrap(~especes_var,scales="free_x")
 
-ggplot(chain_ggpl %>% filter(variables%in%pars_crCl)) + 
-  geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
-  xlab("Parametres Climat") +
-  geom_vline(xintercept = 0, linetype = "solid")+
-  facet_wrap(~especes_var,scales="free_x")
+poster_gg <-function (vectorpars){
+  ggplot(chain_ggpl %>% filter(variables%in%vectorpars)) + 
+    geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
+    xlab(as.character(vectorpars)) +
+    geom_vline(xintercept = 0, linetype = "solid")+
+    facet_wrap(~especes_var,scales="free_x")
+}
 
-ggplot(filter(chain_ggpl,variables%in%parsLogg)) + 
+poster_gg(pars_mo1)
+poster_gg(pars_moOo)
+poster_gg(pars_moLogg)
+poster_gg(pars_moCl)
+
+
+ggplot(filter(chain_ggpl,variables%in%pars_moLogg)) + 
   geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
   xlab("Parametres Logg") +
   geom_vline(xintercept = 0, linetype = "solid")+
