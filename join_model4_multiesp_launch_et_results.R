@@ -511,13 +511,13 @@ pars_save<-c("Ks","Dopt","sigma",
 
 temps_depart <-Sys.time()
 temps_depart
-fitj_cr <- stan('cr_model4_multiesp_camila.stan', data = dataj,pars=pars_save,include=TRUE,
+fitj_cr <- stan('cr_model6_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
                 chain=4,
                 iter=4000,warmup=3000,
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
                 )
 Sys.time()- temps_depart
-save(fitj_cr,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_camila_vcr_3alea_sortie_i4.Rdata'))
+save(fitj_cr,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_6_sortie_i2.Rdata'))
 
 chain<-fitj_cr
 
@@ -535,7 +535,7 @@ fitj_mo <- stan('mo_model5_multiesp.stan', data = dataj,pars=pars_save,include=T
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
 )
 Sys.time()- temps_depart
-save(fitj_mo,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_mo_sortie_i2.Rdata'))
+save(fitj_mo,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_mo5_sortie_i2.Rdata'))
 
 chain<-fitj_mo
 
