@@ -69,7 +69,7 @@ Année la plus ancienne pour les donnee meteo : d'après les données à disposi
 nbmin_arbres <- 0 # nombre minimal d'individus par espece et par site
 nbmin_mes <- 3 # nombre minimal de mesure par arbre
 an_min_meteo<- 1968  # donnee meteo les plus anciennes
-fich_sauv_circ<-"Data_guyafor_16esp_Cl_join"  # nom du fichier de sortie
+fich_sauv_circ<-"Data_guyafor_16esp_Clc_join"  # nom du fichier de sortie
 
 # choix des espèces
 espGFClim<-c(
@@ -124,11 +124,15 @@ ForestLogg<-dataDispoLogg %>%
 ###1 Selection espece cible et filtre suivant annee Meteo minimum disponible
 
 ```{r F_espces, echo=TRUE}
-tabMesures<-dispoGuyafor %>%           
-  mutate(idEsp=paste(Genus,Species),codeEsp=paste(substr(Genus,1,3),"_",substr(Species,1,1),sep="")) %>%  # ajout colonne ID pour chaque espece
+tabMesures<-dispoGuyafor %>% 
+    mutate(idEsp=paste(Genus,Species),codeEsp=paste(substr(Genus,1,3),"_",substr(Species,1,1),sep="")) %>%  # ajout colonne ID pour chaque espece
   filter(idEsp%in%espGFClim) %>%          # on ne garde que les 16 especes cibles
   filter(CensusYear>=an_min_meteo) %>%            # donnee meteo les plus ancienne
-  mutate(NamePlot=paste(Forest,Plot)) %>% # ajout colonne ID pour chaque plot de chaque site
+  mutate(CDyear=as.numeric(substr(CensusDate,1,4))) %>%  # correction date inventaire par CensusYear
+  mutate(CensusD=ifelse(abs(CensusYear-CDyear)>0,paste(CensusYear,substr(CensusDate,5,nchar(CensusDate)),sep=""),CensusDate)) %>% 
+  mutate(CensusDate=CensusD) %>% 
+  select(-CensusD,-CDyear) %>% 
+mutate(NamePlot=paste(Forest,Plot)) %>% # ajout colonne ID pour chaque plot de chaque site
   left_join(ForestLogg, by=c("NamePlot" = "ForestPlot"))  %>% 
       # ajout des colonnes  du tableau ForestLogg pour plot correspondant
   mutate(idForestLoggEsp=paste(Forest,idTraitement,idEsp)) %>% 
@@ -387,11 +391,16 @@ ISHdata<-REW_sites_gfclim %>%
   mutate(CDymIsh=paste(year,"-",month,"-15",sep="")) %>% 
   transmute(Forest=Forest, Ishm=Ishm, CDymIsh=as.Date(CDymIsh,"%Y-%m-%d"))
 
+# ableau min_max par site
+dispoMinMaxIshDate<-ISHdata %>% 
+  group_by(Forest) %>% 
+  summarise(MinCDclim=min(CDymIsh),MaxCDclim=max(CDymIsh))
+
 
 # Construction d'un tableau des sites et couples d'inventaire à partir des mesures sélectionnées
 
 # assemblage avec les couples d'inventaires des donnees de croissance et suppression des doublon
-  tempmo<-datamo_sc %>%  #  extraction des couples de date d'inventaire des donnee de mortalite
+  tempmo<-datamo_sc %>%  #  extraction des couples de date d'inventaire des donnees de mortalite
   select(Forest,CDate2,CDate3) %>% 
   rename(Forest=Forest,CDate1=CDate2,CDate2=CDate3) %>% 
   bind_rows(select(datamo_sc,Forest,CDate1,CDate2))
@@ -401,7 +410,7 @@ ForestInvIsh<-datacr_sc %>%
   select(Forest,CDate1,CDate2) %>% 
   bind_rows(tempmo) %>% 
   distinct() %>% 
-  transmute(Forest=Forest,CDate1=as.Date(CDate1,"%Y-%m-%d"),CDate2=as.Date(CDate2,"%Y-%m-%d")) %>% # Passe les Cdate en format date
+  mutate(CDate1=as.Date(CDate1,"%Y-%m-%d"),CDate2=as.Date(CDate2,"%Y-%m-%d")) %>% # Passe les Cdate en format date
   mutate(CDym1=paste(format(CDate1,format = "%Y"),"-",format(CDate1,format =  "%m"),sep="")) %>%  
   mutate(CDym2=paste(format(CDate2,format="%Y"),"-",format(CDate2,format = "%m"),sep="")) %>% # selectionne seulement les mois et année pour diminuer les nombres d'inventaires
   select(Forest,CDym1,CDym2) %>% 
@@ -414,7 +423,11 @@ ForestInvIsh<-datacr_sc %>%
 # tableau date min d'inventaire par site
 dispoMinMaxCensusDate<-ForestInvIsh %>% 
   group_by(Forest) %>% 
-  summarise(MinCD=min(CDym1),MaxCD=max(CDym2))
+  summarise(MinCD=min(CDym1),MaxCD=max(CDym2)) %>% 
+  left_join(dispoMinMaxIshDate, by="Forest") %>% 
+  mutate(pbdate=ifelse((MinCD>=MinCDclim)&(MaxCD<=MaxCDclim),"ok",
+                       ifelse((MinCD<MinCDclim)&(MaxCD<=MaxCDclim),"pb Min",
+                              ifelse((MinCD>=MinCDclim)&(MaxCD>MaxCDclim),"pb Max","pb Min et Max"))))
 write.csv2(dispoMinMaxCensusDate,file="dispoMinMaxCensusdate.csv")
 
 # test sur Paracou
@@ -424,16 +437,21 @@ write.csv2(dispoMinMaxCensusDate,file="dispoMinMaxCensusdate.csv")
 
 # boucle de calcul de l'indice pour chaque ligne foret_couple_inventaire
 # temps_depart <-Sys.time()
-# i<-1
+# i<-612
 for(i in 1:nrow(ForestInvIsh)) {
   Fplot<-ForestInvIsh$Forest[i]
   date1<-ForestInvIsh$CDym1[i]
   date2<-ForestInvIsh$CDym2[i]
+  
+  testdate<-date1%in%ISHdata$CDymIsh[ISHdata$Forest==Fplot] & date2%in%ISHdata$CDymIsh[ISHdata$Forest==Fplot] # test inter-inventaire couvert par donnees clim
   sortie<-ISHdata %>% filter(Forest==Fplot & (CDymIsh >= date1) & (CDymIsh < date2))  
-  ForestInvIsh$IshInv[i]<-sum(sortie$Ishm)/as.numeric(date2-date1)*365 # on ramène l'indice de stress hydrique à un indice annuel, comme pour les accroissemnents en diamètre
+  ForestInvIsh$IshInv[i]<-ifelse(testdate,sum(sortie$Ishm)/as.numeric(date2-date1)*365,NA) # on ramène l'indice de stress hydrique à un indice annuel, comme pour les accroissemnents en diamètre
   }
 # Sys.time()-temps_depart
-
+# test<-ForestInvIsh %>% 
+#   filter(is.na(IshInv)) %>% 
+#   group_by(Forest) %>% 
+#   summarise(nbinv=n())
 
 ```
 
@@ -449,8 +467,9 @@ datacr_cl<-datacr_sc %>%
   mutate(CDym1=as.Date(paste(Datetemp1,"-15",sep=""),"%Y-%m-%d"),CDym2=as.Date(paste(Datetemp2,"-15",sep=""),"%Y-%m-%d")) %>% 
   # on ajoute un nombre pour le jour sinon as.Date renvoi NA
   select(-Datetemp1,-Datetemp2) %>% 
-  left_join(ForestInvIsh,by=c("Forest","CDym1","CDym2"))
-
+  left_join(ForestInvIsh,by=c("Forest","CDym1","CDym2")) %>% 
+  filter(!is.na(IshInv))  
+ 
 datamo_cl_tmp<-datamo_sc %>%
   mutate(CDym1=as.Date(CDate1,"%Y-%m-%d"),CDym2=as.Date(CDate2,"%Y-%m-%d"),CDym3=as.Date(CDate3,"%Y-%m-%d")) %>% # Passe les Cdate en format date
   mutate(Datetemp1=paste(format(CDym1,format = "%Y"),"-",format(CDym1,format =  "%m"),sep="")) %>%  
@@ -459,7 +478,8 @@ datamo_cl_tmp<-datamo_sc %>%
   mutate(CDym1=as.Date(paste(Datetemp1,"-15",sep=""),"%Y-%m-%d"),CDym2=as.Date(paste(Datetemp2,"-15",sep=""),"%Y-%m-%d"),CDym3=as.Date(paste(Datetemp3,"-15",sep=""),"%Y-%m-%d")) %>% # on ajoute un nombre pour le jour sinon as.Date renvoi NA
   select(-Datetemp1,-Datetemp2,-Datetemp3) %>% 
   left_join(ForestInvIsh,by=c("Forest","CDym1","CDym2")) %>% 
-  rename(IshInvVig=IshInv) 
+  rename(IshInvVig=IshInv) %>% 
+  filter(!is.na(IshInvVig)) 
 
 ForestInvIsh_mo<-ForestInvIsh %>% 
   rename(CDym3=CDym2) %>% 
@@ -467,10 +487,12 @@ ForestInvIsh_mo<-ForestInvIsh %>%
 
 datamo_cl<- datamo_cl_tmp %>% 
   left_join(ForestInvIsh_mo,by=c("Forest","CDym2","CDym3")) %>% 
-  rename(IshInvMo=IshInv) 
+  rename(IshInvMo=IshInv) %>%  
+  filter(!is.na(IshInvMo))
 
   
-save(datacr_cl,datamo_cl,file="data_WaterStress_guyafor.rdata") # le 17/01/2020
+save(datacr_cl,datamo_cl,file="data_WaterStress_guyafor.rdata") # le 17/01/2020, le29/02/2020 après correction des CensusDate et pb datemin et date max d'inventaire
+
 
 
 ```
@@ -710,7 +732,8 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
      index_trait,              # valeur indice exploitation par site
      datacr_cl_lo,            # données pour le modèle de croissance
      datamo_cl_lo,            # données pour le modèlede mortalité
-     file=paste(fich_sauv_circ,".Rdata",sep="")) #Data_guyafor_16esp_Cl_join.Rdata fichier avec donnée climat multisite
+     file=paste(fich_sauv_circ,".Rdata",sep="")) #Data_guyafor_16esp_Clc_join.Rdata fichier avec donnée climat multisite, cavec date corrigées
+#Data_guyafor_16esp_Cl_join.Rdata fichier avec donnée climat multisite
 #"Data16esp_s0_to_join.Rdata") #"S0" pour seuil à 0 pour le nb minimal d'arbres par esp et par site, le 12/06/2019, avec le % de biomasse perdue sur IndexLogg
 
 # pour export vers Rstudio reseau
@@ -758,5 +781,78 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
 # hist(SHcr)
 # Loggcr<-(temp$TxLogg-mean(temp$TxLogg,na.rm=T))/sd(temp$TxLogg,na.rm=T)
 # hist(Loggcr)
+
+clim_nouragues<-REW_sites_gfclim %>% 
+  filter(Forest=="Nouragues")  
+  
+ggplot(clim_nouragues)+
+  geom_line(aes(x=day_julian, y=REW))+
+  facet_wrap(~year,scale="free")
+
+
+par(mfrow=c(2,3))
+ hist(datamo_cl_lo$IshInvMo)
+  hist(datamo_cl_lo$IshInvMo[datamo_cl_lo$Forest=="Paracou"])
+hist(datamo_cl_lo$TxLogg)
+ hist(datamo_cl_lo$TxLogg[datamo_cl_lo$Forest=="Paracou"])
+
+ggplot(datamo_cl_lo)+
+  geom_histogram(aes(x=Year1))+
+  facet_wrap(~Forest,scale="free")
+
+ggplot(datacr_cl_lo)+
+  geom_histogram(aes(x=Year1))+
+  facet_wrap(~Forest,scale="free")
+ggplot(datacr_cl_lo)+
+  geom_histogram(aes(x=IshInv))+
+  facet_wrap(~Forest,scale="free")
+
+test<-datamo_cl_lo %>%
+  group_by(Forest) %>%
+  summarise(nbmes=n(), NbYear1=n_distinct(Year1), NbYear2=n_distinct(Year2))
+
+test_cr<-datacr_cl_lo %>%
+  group_by(Forest) %>%
+  summarise(nbmes=n(), NbYear1=n_distinct(Year1), NbYear2=n_distinct(Year2))
+
+test2<-datamo_cl_lo %>%
+  group_by(Forest) %>%
+  summarise(nbmes=n(), Nbclim=n_distinct(IshInvMo)) %>% 
+  left_join(select(test,-nbmes),by="Forest")
+
+test_nouragues<-datamo_cl_lo %>%
+    filter(Forest=="Nouragues") %>%
+    group_by(Year1) %>%
+    summarise(nbmes=n(), meanclim=mean(IshInvMo), nbna=sum(is.na(IshInvMo)))
+
+test_date<-tabMesuresSelect %>% 
+  group_by(Forest) %>% 
+  summarise(yearmax=max(),yearmin=min(CensusYear)) %>% 
+  left_join(dispoMinMaxCensusDate,by="Forest")
+
+test_date2<-tabMesuresSelect %>% 
+  arrange(desc(CensusDate))
+
+test_yeardate<-dispoGuyafor %>%  
+  select(Forest,CensusYear,CensusDate) %>% 
+  distinct() %>% 
+  mutate(CDyear=as.numeric(format(as.Date(CensusDate,"%Y-%m-%d"),format = "%Y"))) %>% 
+  mutate(test_year=abs(CensusYear-CDyear)) %>% 
+  filter(test_year>1) %>% 
+  arrange(desc(test_year)) 
+save(test_yeardate,file="test_yeardate_guyafor.Rdata")
+
+zoom_yeardate<-dispoGuyafor %>%
+  filter(Forest=="BAFOG" & CensusYear==2002 &CensusDate=="2006-03-15") %>% 
+  # filter(Forest=="Paracou" & Plot=="9" &CensusDate=="2004-08-27") %>% 
+  select(idTree)
+
+zoom_tree<-dispoGuyafor %>% 
+  semi_join(zoom_yeardate, by="idTree") %>% 
+  arrange(idTree, CensusDate)
+
+  group_by(Forest) %>% 
+  summarise(nbpbyear=n())
+
 
 ```
