@@ -505,8 +505,9 @@ chain<-fitj_mocr
 # modèle de croissance seul ####
 
 pars_save<-c("Ks","Dopt","sigma",
+             "Ks2","KsC","DoptC",
              "cr_clim","cr_Clesp","cr_sigClesp",
-             # "cr_logg","cr_sigLoesp","cr_Loesp",
+             "cr_logg","cr_sigLoesp","cr_Loesp",
              "oo_Gmax","cr_Gesp","cr_dmax","cr_sigGesp")
 
 temps_depart <-Sys.time()
@@ -517,7 +518,7 @@ fitj_cr <- stan('cr_model6_multiesp.stan', data = dataj,pars=pars_save,include=T
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
                 )
 Sys.time()- temps_depart
-save(fitj_cr,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_cr_6_sortie_i2.Rdata'))
+save(fitj_cr,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_cr6_ncl_sortie_i2.Rdata'))
 
 chain<-fitj_cr
 
@@ -535,9 +536,10 @@ fitj_mo <- stan('mo_model5_multiesp.stan', data = dataj,pars=pars_save,include=T
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
 )
 Sys.time()- temps_depart
-save(fitj_mo,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_mo5_sortie_i2.Rdata'))
+save(fitj_mo,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_mo5_ncl_sortie_i2.Rdata'))
 
 chain<-fitj_mo
+
 
 ## vecteurs de paramètres  et vecteur espèces ####
 
@@ -563,6 +565,7 @@ pars_mo<-c("oo_logit","mo_Ooesp","onto","onto_sq",
            "mo_sigOoesp","mo_sigClesp","mo_sigLoesp","mo_sigInesp")
 
 pars_cr1<-c("oo_Gmax","Ks","Dopt","cr_dmax","cr_clim","cr_logg","sigma","cr_sigGesp","cr_sigClesp","cr_sigLoesp")
+pars_cr11<-c("oo_Gmax","Ks","Dopt","cr_dmax","cr_clim","cr_logg","sigma")
 pars_crG<-c("oo_Gmax","cr_sigGesp",cr_Gesp_multi)
 pars_crCl<-c("cr_clim","cr_sigClesp",cr_Clesp_multi)
 pars_crLogg<-c("cr_logg","cr_sigLoesp",cr_Loesp_multi)
@@ -626,11 +629,15 @@ traceplot(chain, pars=pars_save, nrow=6) # nrow : nombre de lignes de graphe
 # mcmc_trace(as.array(chain), pars = c(pars),facet_args = list(labeller = label_parsed),window =c(1,700))
 
 
-##3 choix éventuel de chaines et tableau pour graph####
-chain_df<-as.data.frame(chain) 
-chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
-chain_df$iterations<-rep(1:1000,4)
-chain_sel<-chain_df 
+##3 cr choix éventuel de chaines  croissance et tableaux pour graph####
+chain_df_cr<-as.data.frame(chain) 
+# chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
+# chain_df$iterations<-rep(1:1000,4)
+# chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000)))
+# chain_df$iterations<-rep(1:1000,2)
+chain_df_cr$chaines<-as.factor(c(rep(1,3000),rep(2,3000)))
+chain_df_cr$iterations<-rep(1:3000,2)
+chain_sel<-chain_df_cr 
   # filter(chaines!=2) %>% 
   # filter (chaines!=4) 
   # select(-starts_with("logacc_mu_cr")) %>% 
@@ -638,6 +645,24 @@ chain_sel<-chain_df
   # select(-starts_with("logit_mo")) %>% 
   # select(-starts_with("vig_mo")) 
 
+
+##3 mo choix éventuel de chaines mortalité et tableaux pour graph####
+chain_df_mo<-as.data.frame(chain) 
+chain_df_mo$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
+chain_df_mo$iterations<-rep(1:1000,4)
+# chain_df_mo$chaines<-as.factor(c(rep(1,1000),rep(2,1000)))
+# chain_df_mo$iterations<-rep(1:1000,2)
+# chain_df_mo$chaines<-as.factor(c(rep(1,3000),rep(2,3000)))
+# chain_df_mo$iterations<-rep(1:3000,2)
+chain_sel<-chain_df_mo 
+# filter(chaines!=2) %>% 
+# filter (chaines!=4) 
+# select(-starts_with("logacc_mu_cr")) %>% 
+# select(-starts_with("logacc_mu_mo")) %>% 
+# select(-starts_with("logit_mo")) %>% 
+# select(-starts_with("vig_mo")) 
+
+# chaine pour graphe ####
 
 chain_ggpl<-chain_sel %>% 
   pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" ) %>% 
@@ -691,46 +716,48 @@ mcmc_pairs(as.array(chain), pars = pars_moLogg1)
 
 ##6 Posteriors ####
 
-#for(i in 1:length(pars))
-#  mcmc_areas(as.array(chain), prob = 0.8,pars = pars[i])
-
-#mcmc_areas(as.array(chain), prob = 0.8,pars = pars)
-# mcmc_areas(as.array(chain), prob = 0.8,pars = pars1)
-mcmc_areas(as.array(chain), prob = 0.8,pars = pars_mo11)
-mcmc_areas(as.array(chain), prob = 0.8,pars = pars_crCl)
-mcmc_areas(as.array(chain), prob = 0.8,pars = parsLogg[1:3])
-mcmc_areas(as.array(chain), prob = 0.8,pars = parsLogg[4:6])
-
-mcmc_areas(as.array(chain), prob = 0.8,pars = c("oo_Gmax","cr_sigGesp","Ks"))
-mcmc_areas(as.array(chain), prob = 0.8,pars = c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp"))
-mcmc_areas(as.array(chain), prob = 0.8,pars = c("Dopt"))
-mcmc_areas(as.array(chain), prob = 0.8,pars = c("Ks"))
-mcmc_areas(as.array(chain), prob = 0.8,pars = c("cr_dmax"))
-mcmc_areas(as.array(chain), prob = 0.8,pars = c("sigma"))
-
-
-# ggplot(chain_ggpl %>% filter(variables%in%pars)) + 
-
 ggplot(chain_ggpl) + 
   geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
-  xlab("Parametres OO de G") +
+  xlab("Parametres") +
   geom_vline(xintercept = 0, linetype = "solid")+
   facet_wrap(~especes_var,scales="free_x")
 
 poster_gg <-function (vectorpars,legende){
   ggplot(chain_ggpl %>% filter(variables%in%vectorpars)) + 
-    # geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
-    geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
+    geom_freqpoly(aes(x=valeurs,binwidth=0.015,color= chaines)) +
+    # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
     xlab(legende) +
     geom_vline(xintercept = 0, linetype = "solid")+
-    facet_wrap(~especes_var,scales="free_x")
+    facet_wrap(~especes_var,scales="free")
 }
+
+poster_gg(pars_cr11,"paramètres non spécifiques")
+poster_gg(pars_crG,"paramètre de l'ordonnée à l'origine")
+poster_gg(pars_crLogg,"paramètre exploitation")
+poster_gg(pars_crCl,"paramètres climat")
 
 poster_gg(pars_mo1,"paramètres non spécifiques")
 poster_gg(pars_moOo,"paramètre de l'ordonnée à l'origine")
 poster_gg(pars_moLogg,"paramètre exploitation")
 poster_gg(pars_moCl,"paramètres climat")
-poster_gg(pars_moIn,"paramètres interaction climat et exploitation")
+poster_gg(pars_moInt,"paramètres interaction climat et exploitation")
+
+#for(i in 1:length(pars))
+#  mcmc_areas(as.array(chain), prob = 0.8,pars = pars[i])
+
+#mcmc_areas(as.array(chain), prob = 0.8,pars = pars)
+# mcmc_areas(as.array(chain), prob = 0.8,pars = pars1)
+# mcmc_areas(as.array(chain), prob = 0.8,pars = pars_mo11)
+# mcmc_areas(as.array(chain), prob = 0.8,pars = pars_crCl)
+# mcmc_areas(as.array(chain), prob = 0.8,pars = parsLogg[1:3])
+# mcmc_areas(as.array(chain), prob = 0.8,pars = parsLogg[4:6])
+# 
+# mcmc_areas(as.array(chain), prob = 0.8,pars = c("oo_Gmax","cr_sigGesp","Ks"))
+# mcmc_areas(as.array(chain), prob = 0.8,pars = c("oo_Gmax","Ks","Dopt","cr_dmax","sigma","cr_sigGesp"))
+# mcmc_areas(as.array(chain), prob = 0.8,pars = c("Dopt"))
+# mcmc_areas(as.array(chain), prob = 0.8,pars = c("Ks"))
+# mcmc_areas(as.array(chain), prob = 0.8,pars = c("cr_dmax"))
+# mcmc_areas(as.array(chain), prob = 0.8,pars = c("sigma"))
 
 
 #launch_shinystan(chain)
@@ -780,10 +807,25 @@ donnee_mo_logit<-donnee_mo %>%
   mutate(mort_ch=ifelse(morts==1,"arbres morts","arbres vivants")) %>% #légende de futurs graphes
   group_by(morts) %>% 
   mutate(numlig=row_number())
+
+logitm1_pc<-data.frame(matrix(data=NA,nrow=50,ncol=3))
+colnames(logitm1_pc)<-c("quantile","morts","vivants")
+logitm1_pc$quantile<-seq(0.02,1,by=0.02)
+for(p in 1:nrow(logitm1_pc)){
+  logitm1_pc$morts[p]<-quantile(donnee_mo_logit$logitm1[donnee_mo_logit$morts==1],
+                    probs=logitm1_pc$quantile[p])
+  logitm1_pc$vivants[p]<-quantile(donnee_mo_logit$logitm1[donnee_mo_logit$morts==0],
+                    probs=logitm1_pc$quantile[p])
+  
+}
   
 ggplot(donnee_mo_logit) +
-  geom_line (aes(x=numlig,y=logitm1,color="red"),size=1) +
+  geom_line (aes(x=numlig,y=logitm1,color=mort_ch),size=1) +
   facet_wrap(~mort_ch,scales="free_x")
+
+ggplot(logitm1_pc) +
+  geom_line (aes(x=quantile,y=morts,color="red"),size=1) +
+  geom_line (aes(x=quantile,y=vivants,color="blue"),size=1) 
 
 
 
@@ -802,7 +844,6 @@ Fpred_cr<-function(i,vparamj,ontos,datamed,sigmas){
                (log(ontos[i]/as.numeric(vparamj["Dopt"]))/(as.numeric(vparamj["Ks"])*datamed["WD_cr"])))+
     sigmas[i,]["sigma"]
 }
-
 
 Fpred_cr_spe<-function(i,vparamj,ontos,datamed,dataspe,sigmas,nesp){
   #vparamj : vecteur de paramètres ( longueur =100*nb chaine =40000)
@@ -829,7 +870,6 @@ Fpred_cr_spe<-function(i,vparamj,ontos,datamed,dataspe,sigmas,nesp){
               )+
           sigmas[i,]["sigma"]
 }
-
 
 Fpred_cr_spe_clim<-function(i,vparamj,ontos,dataclim,datamed,dataspe,sigmas,nesp){
   #vparamj : vecteur de paramètres ( longueur =100*nb chaine =40000)
@@ -859,6 +899,7 @@ Fpred_cr_spe_clim<-function(i,vparamj,ontos,dataclim,datamed,dataspe,sigmas,nesp
 }
 
 
+
 Fpred_mo_spe_clim<-function(i,vparamj,diam,mo_dataclim,mo_datamed,mo_dmaxspe,sigmas,nesp){
   #vparamj : vecteur de paramètres ( longueur =100*nb chaine =40000)
   #diam : abscisse du graph : ratio diam/dmax = ontogénie
@@ -881,12 +922,33 @@ Fpred_mo_spe_clim<-function(i,vparamj,diam,mo_dataclim,mo_datamed,mo_dmaxspe,sig
                 as.numeric(sigmas[i,]["mo_sigInesp"]))*mo_dataclim[i]*mo_datamed["logg_mo"])
 }
 
+Fpred_mo_spe_clim_sa<-function(i,vparamj,diam,mo_dataclim,mo_datamed,mo_dmaxspe,nesp){
+  #vparamj : vecteur de paramètres ( longueur =100*nb chaine =40000)
+  #diam : abscisse du graph : ratio diam/dmax = ontogénie
+  #mo_dataclim : variable explicative ciblee : Clim
+  #mo_datamed : mediane des variables explicatives non ciblees : logg
+  #modmaxspe : variable explicatie dépendante de l'espèce : dbhmax
+  #nesp : numéro d'espèce (rang dans la liste des espèces)
+  return  (as.numeric(vparamj["oo_logit"])+
+             vparamj[paste("mo_Ooesp[",nesp,"]",sep="")]+
+             as.numeric(vparamj["onto"])*diam[i]/mo_dmaxspe[mo_dmaxspe$rgEsp_mo==nesp,"dbhmaxspe_mo"]+
+             as.numeric(vparamj["onto_sq"])*diam[i]/mo_dmaxspe[mo_dmaxspe$rgEsp_mo==nesp,"dbhmaxspe_mo"]*
+             diam[i]/mo_dmaxspe[mo_dmaxspe$rgEsp_mo==nesp,"dbhmaxspe_mo"]+
+             (as.numeric(vparamj["mo_logg"])+vparamj[paste("mo_Loesp[",nesp,"]",sep="")])*
+                    mo_datamed["logg_mo"]+
+             (as.numeric(vparamj["mo_clim"])+vparamj[paste("mo_Clesp[",nesp,"]",sep="")])*
+                    mo_dataclim[i]+
+             (as.numeric(vparamj["mo_int"])+vparamj[paste("mo_Inesp[",nesp,"]",sep="")])*
+                    mo_dataclim[i]*mo_datamed["logg_mo"])
+}
+
 
 
 ## tableau d'initialisation boucle pred_cr ####
 vparam<-chain_sel %>% 
   select(-lp__) %>% 
-  slice(50:100)
+  # slice(3951:4000)
+  slice((nrow(chain_sel)-50):nrow(chain_sel))
 
 onto<-seq(0.08,2,by=0.08) #abscisse pour calcul du modèle"
 
@@ -903,7 +965,6 @@ datalogg<-seq(min(donnee_cr$logg_cr),max(donnee_cr$logg_cr),
               by=(max(donnee_cr$logg_cr)-min(donnee_cr$logg_cr))/20)
 
 repet<-10 # répétitions par ligne de paramètre et par abscisse (onto)
-
 
 
 # Boucles Fpred_cr_spe et graphe 2 variables ####
@@ -1059,7 +1120,7 @@ ggplot(pred_pc1,aes(x=Ontos,y=Clims))+
 ## tableau d'initialisation boucle pred_mo ####
 vparam<-chain_sel %>% 
     select(-lp__) %>% 
-    slice(50:100)
+    slice((nrow(chain_sel)-250):nrow(chain_sel))
   
 diam<-seq(10,130,by=5) #abscisse pour calcul du modèle"
   
@@ -1076,17 +1137,19 @@ mo_dataclim<-seq(min(donnee_mo$clim_mo),max(donnee_mo$clim_mo),
 mo_datalogg<-seq(min(donnee_mo$logg_mo),max(donnee_mo$logg_mo),
               by=(max(donnee_mo$logg_mo)-min(donnee_mo$logg_mo))/20)
 
-repet<-10 # répétitions par ligne de paramètre et par abscisse (onto)
-
-# Boucles Fpred_mo_spe_clim et graphe a 3 variables ####
+repet<-1 # répétitions par ligne de paramètre, par abscisse par clima
 
 nnvi<-length(diam)*repet*length(mo_dataclim) # nombre de simulations pour un jeu de paramètres 
 diams<-rep(diam,each=(repet*length(mo_dataclim))) # diamètres pour une valeur de paramètres
 clims<-rep(rep(mo_dataclim,each=repet),length(diam)) # indice stress hydrique pour une valeur de paramètres
 
 
+# Boucles Fpred_mo_spe_clim et graphe a 3 variables ####
+
+
+# boucle avec alea ####
 # Nbesp<-nrow(tesp)
-Nbesp<-2
+Nbesp<-1
 temps_depart<-Sys.time()
 temps_depart
 pred_pparam<-matrix(data=NA,nrow=nnvi,ncol=0)
@@ -1094,7 +1157,7 @@ pred_pparam<-matrix(data=NA,nrow=nnvi,ncol=0)
 # j<-1
 # k<-1
 # for(k in 1:max(Nesp)){
-pb <- txtProgressBar(min = 0, max = total, style = 3)
+pb <- txtProgressBar(min = 0, max = nrow(vparam), style = 3)
 db=0
 for(j in 1:nrow(vparam)){
   db=db+1
@@ -1116,12 +1179,49 @@ for(j in 1:nrow(vparam)){
 }  
 Sys.time()- temps_depart 
 
+
+
+
+
+
+# boucle sans alea ####
+# Nbesp<-nrow(tesp)
+Nbesp<-16
+temps_depart<-Sys.time()
+temps_depart
+pred_pparam<-matrix(data=NA,nrow=nnvi,ncol=0)
+# i<-1
+# j<-1
+# k<-1
+# for(k in 1:max(Nesp)){
+pb <- txtProgressBar(min = 0, max = nrow(vparam), style = 3)
+db=0
+
+for(j in 1:nrow(vparam)){
+  db=db+1
+  srt<-rep(NA,nnvi)
+  for(k in 1:Nbesp){
+    for (i in 1:nnvi){
+      srt[i]<-Fpred_mo_spe_clim_sa(i,vparam[j,],diams,clims,mo_datamed,mo_dmaxspe,k)
+    }
+    
+    pred_pparam<-cbind(pred_pparam,srt)
+    colnames(pred_pparam)[k+(j-1)*Nbesp]<-paste("param",j,"_sp",k,sep="")
+  }
+  setTxtProgressBar(pb, db)
+}  
+Sys.time()- temps_depart 
+
 pred_pc<-as.data.frame(pred_pparam)
 pred_pc$Diams<-diams 
 pred_pc$Clims<-clims
 pred_pc$Clims_ch<-as.character(clims)
 
-pred_pc<-pred_pc%>% 
+save(pred_pc,file="stan_paracou30ncl_mo5_i4_predpc.Rdata")
+
+## graphe prédictions ####
+
+pred_gg<-pred_pc%>% 
   pivot_longer(
     cols= starts_with("param"),
     names_to="num_param",
@@ -1130,9 +1230,12 @@ pred_pc<-pred_pc%>%
     values_to = "predictions") %>% 
   mutate(nesp=as.numeric(substr(num_param,nchar(num_param),nchar(num_param)))) %>% 
   left_join(tesp,by="nesp") %>% 
-  arrange(nesp,Diams,Clims)
+  arrange(nesp,Diams,Clims)  
 
-pred_pc$predictions<-unlist(pred_pc$predictions) # quantile() plante si les données sont sous forme de liste 
+pred_gg$predictions<-unlist(pred_gg$predictions) # quantile() plante si les données sont sous forme de liste 
+pred_gg<-pred_gg %>% 
+  mutate(logitm1=exp(predictions)/(1+exp(predictions))) # on calcule le logit-1(pred) c'est à dire la probabilité de mort prévu pour chaque individus
+
 
 pred_pc1<-pred_pc%>% 
   group_by(especes,Diams,Clims,Clims_ch) %>% 
@@ -1164,6 +1267,179 @@ geom_line (aes(x=ontos,y=pc01),color="grey",size=0.5,linetype = "dashed") +
   geom_line (aes(x=ontos,y=pc99),color="grey",size=0.5,linetype = "dashed")
 
 
+###3 tableau paramètres croissance ####
+## Climat
+chain_clim<-chain_sel %>% 
+  select(one_of(pars_crCl),-cr_sigClesp) %>% 
+  pivot_longer(
+        cols= starts_with("cr_Clesp"),
+        names_to="variables",
+        values_to = "valeurs") %>% 
+  mutate(Abs=cr_clim+valeurs) %>% 
+  mutate(nesp=ifelse(substr(variables,nchar(variables)-2,nchar(variables)-2)=="[",
+                            as.numeric(substr(variables,nchar(variables)-1,nchar(variables)-1)),
+                            as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
+  left_join(tesp,by="nesp")  
+
+ggplot(chain_clim) + 
+  geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red")) +
+  # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
+  geom_vline(xintercept = 0, linetype = "solid")+
+  xlab("Parmètres Clim croissance") +
+  facet_wrap(~especes,scales="free")
+
+
+cr_clim_pc_abs<-chain_clim %>% 
+  group_by(especes) %>% 
+  summarise(pc1_abs=quantile(valeurs,probs=0.01),
+            pc5_abs=quantile(valeurs,probs=0.05),
+            mediane_abs=median(valeurs),
+            pc95_abs=quantile(valeurs,probs=0.95),
+            pc99_abs=quantile(valeurs,probs=0.99))
+
+save(cr_clim_pc_abs,file=paste("stan_",code_esp_cible,"_cr4_i4_pc_climAbs.Rdata"))
+
+# logg
+chain_logg<-chain_sel %>% 
+  select(one_of(pars_crLogg),-cr_sigLoesp) %>% 
+  pivot_longer(
+    cols= starts_with("cr_Loesp"),
+    names_to="variables",
+    values_to = "valeurs") %>% 
+  mutate(Abs=cr_logg+valeurs) %>% 
+  mutate(nesp=ifelse(substr(variables,nchar(variables)-2,nchar(variables)-2)=="[",
+                     as.numeric(substr(variables,nchar(variables)-1,nchar(variables)-1)),
+                     as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
+  left_join(tesp,by="nesp")  
+
+ggplot(chain_logg) + 
+  geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red")) +
+  # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
+  geom_vline(xintercept = 0, linetype = "solid")+
+  xlab("Paramètres Logg croissance") +
+  facet_wrap(~especes,scales="free")
+
+
+cr_logg_pc_abs<-chain_logg %>% 
+  group_by(especes) %>% 
+  summarise(pc1_abs=quantile(valeurs,probs=0.01),
+            pc5_abs=quantile(valeurs,probs=0.05),
+            mediane_abs=median(valeurs),
+            pc95_abs=quantile(valeurs,probs=0.95),
+            pc99_abs=quantile(valeurs,probs=0.99))
+
+save(cr_logg_pc_abs,file=paste("stan_",code_esp_cible,"_cr4_i4_pc_LoggAbs.Rdata"))
+
+###4 tableau paramètres mortalité ####
+## Climat
+chain_clim<-chain_sel %>% 
+  select(one_of(pars_moCl),-mo_sigClesp) %>% 
+  pivot_longer(
+    cols= starts_with("mo_Clesp"),
+    names_to="variables",
+    values_to = "valeurs") %>% 
+  mutate(Abs=mo_clim+valeurs) %>% 
+  mutate(nesp=ifelse(substr(variables,nchar(variables)-2,nchar(variables)-2)=="[",
+                     as.numeric(substr(variables,nchar(variables)-1,nchar(variables)-1)),
+                     as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
+  left_join(tesp,by="nesp")  
+
+ggplot(chain_clim) + 
+  geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red")) +
+  # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
+  geom_vline(xintercept = 0, linetype = "solid")+
+  xlab("Paramètres Clim mortalité") +
+  facet_wrap(~especes,scales="free")
+
+
+mo_clim_pc_abs<-chain_clim %>% 
+  group_by(especes) %>% 
+  summarise(pc1_abs=quantile(valeurs,probs=0.01),
+            pc5_abs=quantile(valeurs,probs=0.05),
+            mediane_abs=median(valeurs),
+            pc95_abs=quantile(valeurs,probs=0.95),
+            pc99_abs=quantile(valeurs,probs=0.99)) %>% 
+ 
+
+save(mo_clim_pc_abs,file=paste("stan_",code_esp_cible,"_mo5_i4_pc_climAbs.Rdata"))
+
+# logg
+chain_logg<-chain_sel %>% 
+  select(one_of(pars_moLogg),-mo_sigLoesp) %>% 
+  pivot_longer(
+    cols= starts_with("mo_Loesp"),
+    names_to="variables",
+    values_to = "valeurs") %>% 
+  mutate(Abs=mo_logg+valeurs) %>% 
+  mutate(nesp=ifelse(substr(variables,nchar(variables)-2,nchar(variables)-2)=="[",
+                     as.numeric(substr(variables,nchar(variables)-1,nchar(variables)-1)),
+                     as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
+  left_join(tesp,by="nesp")  
+
+ggplot(chain_logg) + 
+  geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red")) +
+  # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
+  geom_vline(xintercept = 0, linetype = "solid")+
+  xlab("Paramètres Logg mortalité") +
+  facet_wrap(~especes,scales="free")
+
+
+mo_logg_pc_abs<-chain_logg %>% 
+  group_by(especes) %>% 
+  summarise(pc1_abs=quantile(valeurs,probs=0.01),
+            pc5_abs=quantile(valeurs,probs=0.05),
+            mediane_abs=median(valeurs),
+            pc95_abs=quantile(valeurs,probs=0.95),
+            pc99_abs=quantile(valeurs,probs=0.99))
+
+save(mo_logg_pc_abs,file=paste("stan_",code_esp_cible,"_mo5_i4_pc_LoggAbs.Rdata"))
+
+
+# graphe vulnérabilité ####
+load("stan_ paracou30ncl _mo5_i4_pc_LoggAbs.Rdata") # mo_logg_pc_abs
+load("stan_ paracou30ncl _mo5_i4_pc_ClimAbs.Rdata") # mo_clim_pc_abs
+load("stan_ paracou40_loggncl _cr4_i4_pc_LoggAbs.Rdata") # cr_logg_pc_abs
+load("stan_ paracou40_loggncl _cr4_i4_pc_ClimAbs.Rdata") # cr_clim_pc_abs
+
+write.csv2(mo_clim_pc_abs,file="mo_clim_pc_abs.csv")
+write.csv2(cr_clim_pc_abs,file="cr_clim_pc_abs.csv")
+
+
+
+Vuln4graph<-as.data.frame(matrix(data=NA,nrow=16,ncol=0))
+Vuln4graph$VulnGmed<-cr_clim_pc_abs$mediane_abs
+Vuln4graph$VulnGmedlow<-cr_clim_pc_abs$pc5_abs
+Vuln4graph$VulnGmedhigh<-cr_clim_pc_abs$pc95_abs
+Vuln4graph$VulnMmed<-mo_clim_pc_abs$mediane_abs
+Vuln4graph$VulnMmedlow<-mo_clim_pc_abs$pc5_abs
+Vuln4graph$VulnMmedhigh<-mo_clim_pc_abs$pc95_abs
+Vuln4graph$Species<-mo_clim_pc_abs$especes
+# Vuln4graph <- merge(Vuln4graph, SpCode, by="Species")
+
+# plot
+ggplot(data=Vuln4graph, aes(x=VulnMmed, y=VulnGmed, col=Species, label=Species,alpha=1),alpha=1) +
+  geom_hline(yintercept = 0, linetype = "dashed") + geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_pointrange(aes(ymin=VulnGmedlow, ymax=VulnGmedhigh, col=Species),
+                  size=0.5,alpha=0.5, linetype = "solid") +
+  geom_errorbarh(aes(xmin= VulnMmedlow, xmax=VulnMmedhigh, col=Species),
+                 height = 0, size=1.3,alpha=0.5, linetype = "solid") +
+  xlab("Impact sur la mortalité") + ylab("Impact sur la croissance") +
+  # geom_text_repel(hjust=-0.1, vjust=-0.5, size=6) +
+  # theme_bw() + theme(legend.position = "none") + theme(text = element_text(size=15))
+  theme_bw() + theme(text = element_text(size=15))
+
+# plot
+# ggplot(data=Vuln4graph, aes(x=VulnMmed, y=VulnGmed, col=Species, label=SpCode)) +
+# ggplot(data=Vuln4graph, aes(x=VulnMmed, y=VulnGmed, col=Species, label=Species)) +
+#   geom_point(size=3) +
+#   geom_hline(yintercept = 0, linetype = "dashed") + geom_vline(xintercept = 1, linetype = "dashed") +
+#   xlab("Impact on mortality") + ylab("Impact on growth") +
+#   # geom_text_repel(hjust=-0.1, vjust=-0.5, size=8) +
+#   theme_bw() + theme(legend.position = "none") + theme(text = element_text(size=25))
+
+
+
+
 
 # tests ####
 
@@ -1188,4 +1464,17 @@ for (k in DB_dup$idTree) {
   
   setTxtProgressBar(pb, i)
 }
+
+clim_site<-REW_sites_gfclim %>% 
+  mutate(REW04=ifelse(REW>=0.4,NA,REW)) %>% 
+  filter(Forest=="Organabo") %>% 
+  filter(year>=2010&year<2019)
+
+ggplot(clim_site)+
+  geom_line(aes(x=day_julian, y=REW), color="blue")+
+  facet_wrap(~year,scale="free",nrow=2)+
+  geom_hline(yintercept = 0.4, linetype = "dashed")+
+  geom_ribbon(aes(x=day_julian,ymin=REW04, ymax=0.4,fill="grey"),color="blue")+
+  xlab("site Organabo (Mana)") +
+  theme(legend.position = "none")
 
