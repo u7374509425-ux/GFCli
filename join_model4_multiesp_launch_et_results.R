@@ -1438,6 +1438,19 @@ ggplot(data=Vuln4graph, aes(x=VulnMmed, y=VulnGmed, col=Species, label=Species,a
 #   theme_bw() + theme(legend.position = "none") + theme(text = element_text(size=25))
 
 
+# graphe indices REW journaliers ####
+clim_site<-REW_sites_gfclim %>%  # REW_sites_gfclim est issu du ficher Donnees_guyafor_pre-traitement.Rmd
+  mutate(REW04=ifelse(REW>=0.4,NA,REW)) %>% 
+  filter(Forest=="Organabo") %>% # choix du site
+  filter(year>=2010&year<2019) # choix des années
+
+ggplot(clim_site)+
+  geom_line(aes(x=day_julian, y=REW), color="blue")+
+  facet_wrap(~year,scale="free",nrow=2)+ # fixe le nombre de ligne de graphes
+  geom_hline(yintercept = 0.4, linetype = "dashed")+
+  geom_ribbon(aes(x=day_julian,ymin=REW04, ymax=0.4,fill="grey"),color="blue")+
+  xlab("site Organabo (Mana)") + # toitre du graphe sur l'axe des X
+  theme(legend.position = "none") # pour ne pas faire apparaitre la légende
 
 
 
@@ -1465,16 +1478,4 @@ for (k in DB_dup$idTree) {
   setTxtProgressBar(pb, i)
 }
 
-clim_site<-REW_sites_gfclim %>% 
-  mutate(REW04=ifelse(REW>=0.4,NA,REW)) %>% 
-  filter(Forest=="Organabo") %>% 
-  filter(year>=2010&year<2019)
-
-ggplot(clim_site)+
-  geom_line(aes(x=day_julian, y=REW), color="blue")+
-  facet_wrap(~year,scale="free",nrow=2)+
-  geom_hline(yintercept = 0.4, linetype = "dashed")+
-  geom_ribbon(aes(x=day_julian,ymin=REW04, ymax=0.4,fill="grey"),color="blue")+
-  xlab("site Organabo (Mana)") +
-  theme(legend.position = "none")
 
