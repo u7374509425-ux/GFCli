@@ -271,8 +271,20 @@ Dmax_esp_site<-tabMesuresSelect %>%
   left_join(Dmax_esp,by=c("idEsp")) %>% 
   mutate(Dmax95 = if_else(nbtree >= seuil, Dmax95, Dmax95_esp)) %>% # si nb arbres par site trop faible on attribue le dmax de l'espèce multisite
   select(-Dmax95_esp)
+
+Dmaxnbval_site<-Dmax_esp_site %>% 
+  group_by(idEsp) %>% 
+  summarise(nbval=n_distinct(Dmax95))
   
-  
+  ggplot(Dmax_esp_site, aes(x=idEsp,y=Dmax95))+
+    geom_boxplot()+
+    xlab("")+ylab("Diamètre max")+
+    theme_bw() +
+    # theme(axis.text.x = element_text(size=14, angle=90,hjust = 1,vjust=0.25))
+    theme(axis.text.x = element_text(size=14, angle=60,hjust=1,vjust=1))+
+    geom_text(data=Dmaxnbval_site,aes( y=10, label=nbval))+
+    ylim(min=0,130)
+
 
 # calcul de l'amplitude des dmax pour chaque espece et ajout des Dmax par site#
 esp_range_dmax<-Dmax_esp_site %>%
@@ -782,12 +794,6 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
 # Loggcr<-(temp$TxLogg-mean(temp$TxLogg,na.rm=T))/sd(temp$TxLogg,na.rm=T)
 # hist(Loggcr)
 
-clim_nouragues<-REW_sites_gfclim %>% 
-  filter(Forest=="Nouragues")  
-  
-ggplot(clim_nouragues)+
-  geom_line(aes(x=day_julian, y=REW))+
-  facet_wrap(~year,scale="free")
 
 
 par(mfrow=c(2,3))
@@ -801,10 +807,10 @@ ggplot(datamo_cl_lo)+
   facet_wrap(~Forest,scale="free")
 
 ggplot(datacr_cl_lo)+
-  geom_histogram(aes(x=Year1))+
+  geom_histogram(aes(x=IshInv))+
   facet_wrap(~Forest,scale="free")
 ggplot(datacr_cl_lo)+
-  geom_histogram(aes(x=IshInv))+
+  geom_histogram(aes(x=Year1))+
   facet_wrap(~Forest,scale="free")
 
 test<-datamo_cl_lo %>%
@@ -853,6 +859,38 @@ zoom_tree<-dispoGuyafor %>%
 
   group_by(Forest) %>% 
   summarise(nbpbyear=n())
+
+nb_data_site<-dispoGuyafor %>% 
+  group_by(Forest,Plot,CensusYear) %>% 
+  summarise(nbmes=n()) %>%
+  group_by(Forest) %>% 
+  summarise(MeanPlotmes=mean(nbmes))
+  
+  
+REW_pc_forest<-REW_sites_gfclim %>% 
+  group_by(Forest) %>% 
+  summarise(REWpc1=quantile(REW,probs=0.01),
+            REWpc5=quantile(REW,probs=0.05),
+            REWmediane=median(REW),
+            REWpc95=quantile(REW,probs=0.95),
+            REWpc99=quantile(REW,probs=0.99)) %>% 
+  arrange(REWpc5)
+  
+  
+    
+# graphe indices REW journaliers ####
+clim_site<-REW_sites_gfclim %>%  # REW_sites_gfclim est issu du ficher Donnees_guyafor_pre-traitement.Rmd
+  mutate(REW04=ifelse(REW>=0.4,NA,REW)) %>% 
+  filter(Forest=="Organabo") %>% # choix du site
+  filter(year>=2010&year<2019) # choix des années
+
+ggplot(clim_site)+
+  geom_line(aes(x=day_julian, y=REW), color="blue")+
+  facet_wrap(~year,scale="free",nrow=2)+ # fixe le nombre de ligne de graphes
+  geom_hline(yintercept = 0.4, linetype = "dashed")+
+  geom_ribbon(aes(x=day_julian,ymin=REW04, ymax=0.4,fill="grey"),color="blue")+
+  xlab("site Organabo (Mana)") + # toitre du graphe sur l'axe des X
+  theme(legend.position = "none") # pour ne pas faire apparaitre la légende
 
 
 ```
