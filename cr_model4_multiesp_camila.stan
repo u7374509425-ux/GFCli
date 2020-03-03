@@ -67,8 +67,9 @@ transformed parameters {    // Transformed parameters block
     logacc_mu_cr[n1] = (oo_Gmax+
                         cr_Gesp[rgEsp_cr[n1]]+
                         cr_dmax*dbhmax_cr[n1]+
-                        (cr_clim+cr_Clesp[rgEsp_cr[n1]])*clim_cr[n1]+
-                        (cr_logg+cr_Loesp[rgEsp_cr[n1]])*logg_cr[n1])*
+                        (cr_clim+cr_Clesp[rgEsp_cr[n1]])*clim_cr[n1] //+
+ //                       (cr_logg+cr_Loesp[rgEsp_cr[n1]])*logg_cr[n1]
+                        )*
                         exp((-0.5)*pow(log(dbh_cr[n1]/(dbhmax_cr[n1]*Dopt))/(Ks*WD_cr[n1]),2)); // obligation de faire un boucle sinon erreur de la fonction pow()
   }
 //  for(n1 in 1:Ncr){ 
@@ -83,16 +84,16 @@ model {                            // Model block
   Ks ~ normal(0,100);         // priors
   Dopt ~ normal(0,100);       // priors
   cr_clim ~ normal(0,100);    // priors
-  cr_logg ~ normal(0,100);    // priors
+//  cr_logg ~ normal(0,100);    // priors
   sigma ~ normal(0,5);       // priors
   cr_sigGesp ~ normal(0,5);       // priors
   cr_sigClesp ~ normal(0,5);       // priors
-  cr_sigLoesp ~ normal(0,5);       // priors
+//  cr_sigLoesp ~ normal(0,5);       // priors
 
   for(nesp in 1:Nesp){                // priors
     cr_Gesp[nesp]~normal(0,cr_sigGesp);
     cr_Clesp[nesp]~normal(0,cr_sigClesp);
-    cr_Loesp[nesp]~normal(0,cr_sigLoesp);
+//    cr_Loesp[nesp]~normal(0,cr_sigLoesp);
   }
   for(n1 in 1:Ncr){
     log(Acc_cr[n1]+1)~normal(logacc_mu_cr[n1],sigma);       // likelihood
