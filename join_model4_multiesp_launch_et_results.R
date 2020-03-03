@@ -505,23 +505,24 @@ chain<-fitj_mocr
 # modèle de croissance seul ####
 
 pars_save<-c("Ks","Dopt","sigma",
-             "Ks2","KsC","DoptC",
+             # "Ks2","KsC","DoptC",
              "cr_clim","cr_Clesp","cr_sigClesp",
              "cr_logg","cr_sigLoesp","cr_Loesp",
-             "oo_Gmax","cr_Gesp","cr_dmax","cr_sigGesp")
+             "oo_Gmax","cr_Gesp","cr_dmax","cr_sigGesp",
+             "cr_int","cr_Inesp","cr_sigInesp")
 
 temps_depart <-Sys.time()
 temps_depart
 fitj_cr <- stan('cr_model6_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
-                chain=4,
+                chain=2,
                 iter=4000,warmup=3000,
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
                 )
 Sys.time()- temps_depart
-save(fitj_cr,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_cr6_ncl_sortie_i2.Rdata'))
+save(fitj_cr,parametres,pars_save,code_esp_cible,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_cr5_sortie_i4.Rdata'))
 
 chain<-fitj_cr
-
+code_sim<-paste('stan_sorties/stan_',code_esp_cible,'_cr5_i4')
 # modèle mortalité seul ####
 pars_save<-c("oo_logit","mo_Ooesp","onto","onto_sq","mo_sigOoesp",
              "mo_clim","mo_Clesp","mo_sigClesp",
@@ -536,9 +537,10 @@ fitj_mo <- stan('mo_model5_multiesp.stan', data = dataj,pars=pars_save,include=T
                 # control = list(adapt_delta = 0.99,max_treedepth = 15)
 )
 Sys.time()- temps_depart
-save(fitj_mo,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_mo5_ncl_sortie_i2.Rdata'))
+save(fitj_mo,parametres,pars_save,code_esp_cible,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_mo5_ncl_sortie_i2.Rdata'))
 
 chain<-fitj_mo
+code_sim<-paste('stan_sorties/stan_',code_esp_cible,'_mo5_i2')
 
 
 ## vecteurs de paramètres  et vecteur espèces ####
@@ -551,7 +553,7 @@ pars<-chain@model_pars # contient aussi les "transformed parameters comme logacc
 cr_Gesp_multi<-paste("cr_Gesp[",1:nrow(tesp),"]",sep="")
 cr_Clesp_multi<-paste("cr_Clesp[",1:nrow(tesp),"]",sep="")
 cr_Loesp_multi<-paste("cr_Loesp[",1:nrow(tesp),"]",sep="")
-# cr_Inesp_multi<-paste("cr_Inesp[",1:nrow(tesp),"]",sep="")
+cr_Inesp_multi<-paste("cr_Inesp[",1:nrow(tesp),"]",sep="")
 
 mo_Ooesp_multi<-paste("mo_Ooesp[",1:nrow(tesp),"]",sep="")
 mo_Clesp_multi<-paste("mo_Clesp[",1:nrow(tesp),"]",sep="")
@@ -569,7 +571,7 @@ pars_cr11<-c("oo_Gmax","Ks","Dopt","cr_dmax","cr_clim","cr_logg","sigma")
 pars_crG<-c("oo_Gmax","cr_sigGesp",cr_Gesp_multi)
 pars_crCl<-c("cr_clim","cr_sigClesp",cr_Clesp_multi)
 pars_crLogg<-c("cr_logg","cr_sigLoesp",cr_Loesp_multi)
-# pars_crInt<-c("cr_Ingg","cr_sigInesp",cr_Inesp_multi)
+pars_crInt<-c("cr_Ingg","cr_sigInesp",cr_Inesp_multi)
 
 
 pars_mo1<-c("oo_logit","onto","onto_sq","mo_clim","mo_logg","mo_sigOoesp","mo_sigClesp","mo_sigLoesp")
@@ -631,13 +633,13 @@ traceplot(chain, pars=pars_save, nrow=6) # nrow : nombre de lignes de graphe
 
 ##3 cr choix éventuel de chaines  croissance et tableaux pour graph####
 chain_df_cr<-as.data.frame(chain) 
-# chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
-# chain_df$iterations<-rep(1:1000,4)
-# chain_df$chaines<-as.factor(c(rep(1,1000),rep(2,1000)))
-# chain_df$iterations<-rep(1:1000,2)
-chain_df_cr$chaines<-as.factor(c(rep(1,3000),rep(2,3000)))
-chain_df_cr$iterations<-rep(1:3000,2)
-chain_sel<-chain_df_cr 
+# chain_df_cr$chaines<-as.factor(c(rep(1,1000),rep(2,1000),rep(3,1000),rep(4,1000)))
+# chain_df_cr$iterations<-rep(1:1000,4)
+chain_df_cr$chaines<-as.factor(c(rep(1,1000),rep(2,1000)))
+chain_df_cr$iterations<-rep(1:1000,2)
+# chain_df_cr$chaines<-as.factor(c(rep(1,3000),rep(2,3000)))
+# chain_df_cr$iterations<-rep(1:3000,2)
+chain_sel<-chain_df_cr
   # filter(chaines!=2) %>% 
   # filter (chaines!=4) 
   # select(-starts_with("logacc_mu_cr")) %>% 
@@ -662,7 +664,7 @@ chain_sel<-chain_df_mo
 # select(-starts_with("logit_mo")) %>% 
 # select(-starts_with("vig_mo")) 
 
-# chaine pour graphe ####
+#### chaine pour graphe et sauvegarde ####
 
 chain_ggpl<-chain_sel %>% 
   pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" ) %>% 
@@ -690,7 +692,8 @@ chain_ggpl<-chain_ggpl %>%
 # chain_ggpl<-chain_sel %>% 
 #   pivot_longer(-c(iterations,chaines),names_to ="variables",values_to = "valeurs" ) %>% 
 #   filter(variables %in% pars)
-
+ save(chain_sel,chain_ggpl,code_esp_cible,parametres,tesp,pars_save,
+      file=paste(code_sim,'_chain.Rdata',sep=""))
 
 ##4 traces chaines choisie ####
 ggplot(chain_ggpl) + 
@@ -735,6 +738,7 @@ poster_gg(pars_cr11,"paramètres non spécifiques")
 poster_gg(pars_crG,"paramètre de l'ordonnée à l'origine")
 poster_gg(pars_crLogg,"paramètre exploitation")
 poster_gg(pars_crCl,"paramètres climat")
+poster_gg(pars_crInt,"paramètres interactions Climat et exploitation")
 
 poster_gg(pars_mo1,"paramètres non spécifiques")
 poster_gg(pars_moOo,"paramètre de l'ordonnée à l'origine")
@@ -762,7 +766,7 @@ poster_gg(pars_moInt,"paramètres interaction climat et exploitation")
 
 #launch_shinystan(chain)
 
-#### D- Predictions et graphe de sortie ####
+##7Predictions et graphe de sortie ####
 
 ###1 calcul des prédictions pour chaque observé ####
 donnee_cr<-as.data.frame(dataj[][c("Acc_cr","clim_cr","logg_cr","dbh_cr","dbhmax_cr","WD_cr","rgEsp_cr")]) #ensemble des donnees liees au modele de croissance
@@ -1297,7 +1301,7 @@ cr_clim_pc_abs<-chain_clim %>%
             pc95_abs=quantile(valeurs,probs=0.95),
             pc99_abs=quantile(valeurs,probs=0.99))
 
-save(cr_clim_pc_abs,file=paste("stan_",code_esp_cible,"_cr4_i4_pc_climAbs.Rdata"))
+save(cr_clim_pc_abs,file=paste("PC_",code_esp_cible,"_cr5_i4_pc_climAbs.Rdata",sep=""))
 
 # logg
 chain_logg<-chain_sel %>% 
@@ -1328,7 +1332,7 @@ cr_logg_pc_abs<-chain_logg %>%
             pc95_abs=quantile(valeurs,probs=0.95),
             pc99_abs=quantile(valeurs,probs=0.99))
 
-save(cr_logg_pc_abs,file=paste("stan_",code_esp_cible,"_cr4_i4_pc_LoggAbs.Rdata"))
+save(cr_logg_pc_abs,file=paste("PC_",code_esp_cible,"_cr5_i4_pc_LoggAbs.Rdata",sep=""))
 
 ###4 tableau paramètres mortalité ####
 ## Climat
@@ -1361,7 +1365,7 @@ mo_clim_pc_abs<-chain_clim %>%
             pc99_abs=quantile(valeurs,probs=0.99)) %>% 
  
 
-save(mo_clim_pc_abs,file=paste("stan_",code_esp_cible,"_mo5_i4_pc_climAbs.Rdata"))
+save(mo_clim_pc_abs,file=paste("PC_",code_esp_cible,"_mo5_i4_pc_climAbs.Rdata",sep=""))
 
 # logg
 chain_logg<-chain_sel %>% 
@@ -1392,20 +1396,20 @@ mo_logg_pc_abs<-chain_logg %>%
             pc95_abs=quantile(valeurs,probs=0.95),
             pc99_abs=quantile(valeurs,probs=0.99))
 
-save(mo_logg_pc_abs,file=paste("stan_",code_esp_cible,"_mo5_i4_pc_LoggAbs.Rdata"))
+save(mo_logg_pc_abs,file=paste("PC_",code_esp_cible,"_mo5_i4_pc_LoggAbs.Rdata",sep=""))
 
 
 # graphe vulnérabilité ####
-load("stan_ paracou30ncl _mo5_i4_pc_LoggAbs.Rdata") # mo_logg_pc_abs
-load("stan_ paracou30ncl _mo5_i4_pc_ClimAbs.Rdata") # mo_clim_pc_abs
-load("stan_ paracou40_loggncl _cr4_i4_pc_LoggAbs.Rdata") # cr_logg_pc_abs
-load("stan_ paracou40_loggncl _cr4_i4_pc_ClimAbs.Rdata") # cr_clim_pc_abs
+load("PC_paracou30ncl _mo5_i4_pc_LoggAbs.Rdata") # mo_logg_pc_abs
+load("PC_paracou30ncl _mo5_i4_pc_ClimAbs.Rdata") # mo_clim_pc_abs
+load("PC_paracou30ncl _cr5_i4_pc_LoggAbs.Rdata") # cr_logg_pc_abs
+load("PC_paracou30ncl _cr5_i4_pc_ClimAbs.Rdata") # cr_clim_pc_abs
 
 write.csv2(mo_clim_pc_abs,file="mo_clim_pc_abs.csv")
 write.csv2(cr_clim_pc_abs,file="cr_clim_pc_abs.csv")
 
 
-
+#climat
 Vuln4graph<-as.data.frame(matrix(data=NA,nrow=16,ncol=0))
 Vuln4graph$VulnGmed<-cr_clim_pc_abs$mediane_abs
 Vuln4graph$VulnGmedlow<-cr_clim_pc_abs$pc5_abs
@@ -1414,6 +1418,17 @@ Vuln4graph$VulnMmed<-mo_clim_pc_abs$mediane_abs
 Vuln4graph$VulnMmedlow<-mo_clim_pc_abs$pc5_abs
 Vuln4graph$VulnMmedhigh<-mo_clim_pc_abs$pc95_abs
 Vuln4graph$Species<-mo_clim_pc_abs$especes
+# Vuln4graph <- merge(Vuln4graph, SpCode, by="Species")
+
+#logg
+Vuln4graph<-as.data.frame(matrix(data=NA,nrow=16,ncol=0))
+Vuln4graph$VulnGmed<-cr_logg_pc_abs$mediane_abs
+Vuln4graph$VulnGmedlow<-cr_logg_pc_abs$pc5_abs
+Vuln4graph$VulnGmedhigh<-cr_logg_pc_abs$pc95_abs
+Vuln4graph$VulnMmed<-mo_logg_pc_abs$mediane_abs
+Vuln4graph$VulnMmedlow<-mo_logg_pc_abs$pc5_abs
+Vuln4graph$VulnMmedhigh<-mo_logg_pc_abs$pc95_abs
+Vuln4graph$Species<-mo_logg_pc_abs$especes
 # Vuln4graph <- merge(Vuln4graph, SpCode, by="Species")
 
 # plot
