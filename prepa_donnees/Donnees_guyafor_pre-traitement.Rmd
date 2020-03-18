@@ -384,7 +384,7 @@ seuilREW<-0.4  # seuil pour calcul indice Water
 # REWdata<-read.csv2("REW_1978-2017_Fabien.csv",sep=",",dec=".")
 
 
-# chargement des donnée REW par jour et par site (donnees journalières de REW avec date en trois colonnes : year, month, day)
+#1 Chargement des donnée REW par jour et par site (donnees journalières de REW avec date en trois colonnes : year, month, day) ####
 
 load(file="REW_guyafor_multisite.Rdata")
      # station, # plages de dates des donnée par station meteo
@@ -403,13 +403,13 @@ ISHdata<-REW_sites_gfclim %>%
   mutate(CDymIsh=paste(year,"-",month,"-15",sep="")) %>% 
   transmute(Forest=Forest, Ishm=Ishm, CDymIsh=as.Date(CDymIsh,"%Y-%m-%d"))
 
-# ableau min_max par site
+# tableau min_max par site
 dispoMinMaxIshDate<-ISHdata %>% 
   group_by(Forest) %>% 
   summarise(MinCDclim=min(CDymIsh),MaxCDclim=max(CDymIsh))
 
 
-# Construction d'un tableau des sites et couples d'inventaire à partir des mesures sélectionnées
+#2 Construction d'un tableau des sites et couples d'inventaire à partir des mesures sélectionnées ####
 
 # assemblage avec les couples d'inventaires des donnees de croissance et suppression des doublon
   tempmo<-datamo_sc %>%  #  extraction des couples de date d'inventaire des donnees de mortalite
@@ -447,7 +447,7 @@ write.csv2(dispoMinMaxCensusDate,file="dispoMinMaxCensusdate.csv")
 # mutate(ISHmy=ISH(CDym1,CDym2,Forest,dataREW))
 
 
-# boucle de calcul de l'indice pour chaque ligne foret_couple_inventaire
+#3 Boucle de calcul de l'indice pour chaque ligne foret_couple_inventaire ####
 # temps_depart <-Sys.time()
 # i<-612
 for(i in 1:nrow(ForestInvIsh)) {
@@ -464,6 +464,40 @@ for(i in 1:nrow(ForestInvIsh)) {
 #   filter(is.na(IshInv)) %>% 
 #   group_by(Forest) %>% 
 #   summarise(nbinv=n())
+
+
+#4 Graphe indices REW journaliers ####
+
+clim_site<-REW_sites_gfclim %>%  # REW_sites_gfclim est issu du ficher Donnees_guyafor_pre-traitement.Rmd
+  mutate(REW04=ifelse(REW>=0.4,NA,REW)) %>% 
+  filter(Forest=="Montagne Tortue") %>% # choix du site
+  filter(year>=2010&year<2019) # choix des années
+
+ggplot(clim_site)+
+  geom_line(aes(x=day_julian, y=REW), color="blue")+
+  facet_wrap(~year,scales="free_x",nrow=3)+ # fixe le nombre de ligne de graphes
+  geom_hline(yintercept = 0.4, linetype = "dashed")+
+  geom_ribbon(aes(x=day_julian,ymin=REW04, ymax=0.4,fill="grey"),color="blue")+
+  xlab("site de Montagne Tortue (Régina)") + # toitre du graphe sur l'axe des X
+  theme(axis.title.x = element_text(size=15,hjust=0.5,vjust=0))+
+  theme(legend.position = "none")+ # pour ne pas faire apparaitre la légende
+  scale_x_continuous(breaks=NULL,labels=NULL)
+
+clim_site<-REW_sites_gfclim %>%  # REW_sites_gfclim est issu du ficher Donnees_guyafor_pre-traitement.Rmd
+  mutate(REW04=ifelse(REW>=0.4,NA,REW)) %>% 
+  filter(Forest=="Organabo") %>% # choix du site
+  filter(year>=2010&year<2019) # choix des années
+
+ggplot(clim_site)+
+  geom_line(aes(x=day_julian, y=REW), color="blue")+
+  facet_wrap(~year,scales="free_x",nrow=3)+ # fixe le nombre de ligne de graphes
+  geom_hline(yintercept = 0.4, linetype = "dashed")+
+  geom_ribbon(aes(x=day_julian,ymin=REW04, ymax=0.4,fill="grey"),color="blue")+
+  xlab("site d'Organabo (Mana)") + # toitre du graphe sur l'axe des X
+  theme(axis.title.x = element_text(size=15,hjust=0.5,vjust=0))+
+  theme(legend.position = "none")+ # pour ne pas faire apparaitre la légende
+  scale_x_continuous(breaks=NULL,labels=NULL)
+    
 
 ```
 
@@ -839,12 +873,13 @@ test_date<-tabMesuresSelect %>%
 test_date2<-tabMesuresSelect %>% 
   arrange(desc(CensusDate))
 
-test_yeardate<-dispoGuyafor %>%  
+test_yeardate<-Paracou_upto2018 %>%  
   select(Forest,CensusYear,CensusDate) %>% 
   distinct() %>% 
   mutate(CDyear=as.numeric(format(as.Date(CensusDate,"%Y-%m-%d"),format = "%Y"))) %>% 
+  mutate(CDmonth=as.numeric(format(as.Date(CensusDate,"%Y-%m-%d"),format = "%m"))) %>% 
   mutate(test_year=abs(CensusYear-CDyear)) %>% 
-  filter(test_year>1) %>% 
+  filter(test_year>0) %>% 
   arrange(desc(test_year)) 
 save(test_yeardate,file="test_yeardate_guyafor.Rdata")
 
