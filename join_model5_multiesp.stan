@@ -51,21 +51,14 @@ data {                           // Data block
  
 
 parameters {
-  real <lower=0.01> oo_Gmax;  // Parameter croissance : ordonnee a l'origine de Gmax
   real <lower=0.2,upper=2.5> Ks;       // Parameter croissance
   real <lower=0,upper=1> Dopt;    // Parameter croissance, borne à 1 fois le dmax de l'espèce pour une site donné
+  real <lower=0.01> oo_Gmax;  // Parameter croissance : ordonnee a l'origine de Gmax
   real  cr_clim;           // Parameter croissance
   real  cr_logg;           // Parameter croissance
   real  cr_dmax;             
   real  cr_int;           // Parameter croissance
-  real  oo_logit;               // Parameter mortalite : ordonnee a l'origine du logit
-  real  vig;               // Parameter mortalite
-  real <upper=0> onto;      // Parameter mortalite
-  real <lower=0> onto_sq;   // Parameter mortalite
-  real  mo_clim;             // Parameter mortalite
-  real  mo_logg;           // Parameter mortalite
-  real  mo_int;           // Parameter mortalite
-  real <lower=0> sigma;     // variance modèle de mortalite
+  real <lower=0> sigma;     // variance modèle de croissance
   real <lower=0> cr_sigGesp;     // variance effet alea espece sur Gmax
   real <lower=0> cr_sigClesp;     // variance effet alea espece sur Gmax
   real <lower=0> cr_sigLoesp;     // variance effet alea espece sur Gmax
@@ -74,6 +67,13 @@ parameters {
   vector [Nesp] cr_Clesp;     //effet aleatoire especes croissance sur Clim
   vector [Nesp] cr_Loesp;     //effet aleatoire especes croisance sur Logg 
   vector [Nesp] cr_Inesp;     //effet aleatoire especes croisance sur Logg 
+  real  oo_logit;               // Parameter mortalite : ordonnee a l'origine du logit
+  real  vig;               // Parameter mortalite
+  real <upper=0> onto;      // Parameter mortalite
+  real <lower=0> onto_sq;   // Parameter mortalite
+  real  mo_clim;             // Parameter mortalite
+  real  mo_logg;           // Parameter mortalite
+  real  mo_int;           // Parameter mortalite
   real <lower=0> mo_sigOoesp;     // variance effet alea espece sur mortalite
   real <lower=0> mo_sigClesp;     // variance effet alea espece sur mortalite clim
   real <lower=0> mo_sigLoesp;     // variance effet alea espece sur mortalite logg
@@ -85,7 +85,6 @@ parameters {
 }
 
 transformed parameters {    // Transformed parameters block
-// modele croissance n-1 n  
   vector [Ncr] logacc_mu_cr;            
   vector [Nmo] logit_mo;        // nombre reel=logit(proba mort)    
   vector [Nmo] logacc_mu_mo;          // prediction log(accroisssement) (donnees mortalite) = logacc_pred
@@ -138,7 +137,7 @@ model {                            // Model block
   mo_clim ~ normal(0,100);   // priors
   mo_logg ~ normal(0,100);   // priors
   mo_int ~ normal(0,100);   // priors
-  sigma ~ gamma(10^2,10^2);       // priors
+  sigma ~ normal(0,5);       // priors toncature min sur 0
   cr_sigGesp ~ normal(0,5);       // priors toncature min sur 0
   cr_sigClesp ~ normal(0,5);       // priors toncature min sur 0
   cr_sigLoesp ~ normal(0,2);      // priors toncature min sur 0

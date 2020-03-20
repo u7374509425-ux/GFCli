@@ -4,12 +4,13 @@
 // effet logg effet climat 
 // effet alea especes sur logit, cima et logg
 // Interaction Logg*clima avec effet aléatoire
-//  logit_mo[n2]= oo_logit+
-//                onto*dbh_mo[n2]/dbhmax_mo[n2]+
-//                onto_sq*pow(dbh_mo[n2]/dbhmax_mo[n2],2)+
-//                mo_clim*clim_mo[n2]+
-//                mo_logg*logg_mo[n2]+
-//                mo_int*clim_mo[n2]*logg_mo[n2]; // logit(mort reussie) 
+//    logit_mo[n2]= oo_logit+
+//                  mo_Ooesp[rgEsp_mo[n2]]+
+//                  onto*dbh_mo[n2]/dbhmax_mo[n2]+
+//                  onto_sq*pow(dbh_mo[n2]/dbhmax_mo[n2],2)+
+//                  (mo_clim+mo_Clesp[rgEsp_mo[n2]])*clim_mo[n2]+
+//                  (mo_logg+mo_Loesp[rgEsp_mo[n2]])*logg_mo[n2]+
+//                  (mo_int+mo_Inesp[rgEsp_mo[n2]])*clim_mo[n2]*logg_mo[n2]; // logit(mort reussie) 
 
 
 data {                           // Data block
