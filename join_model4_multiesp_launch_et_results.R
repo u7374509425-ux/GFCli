@@ -511,21 +511,19 @@ pars_save<-c("Ks","Dopt","sigma",
 
 temps_depart <-Sys.time()
 temps_depart
-fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4)
+fitjm <- stan('join_model5_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
+               chain=2,
+               iter=2000,warmup=1000
+              )
+
 Sys.time()- temps_depart
-save(fitj_c,parametres,pars_save,file=paste('stan_sorties/stan_',code_esp_cible,'_join_vcr_sortie.Rdata')) # voi debut du fichier stan pour les specificite
+save(fitjm,parametres,pars_save,code_esp_cible,tesp,
+     file=paste('stan_sorties/stan_',code_esp_cible,'_jo5_sortie_c2i2.Rdata',sep="")) # voir debut du fichier stan pour les specificite
 
-# selection e parametres de sortiespour exclure des paramètre lies au effet aleatoire : un par observation ("logacc_mu_cr","logit_mo", "logacc_mu_mo", "vig_mo")
-# non testé
-#pars_save<-c("oo_Gmax","Ks","Dopt","cr_clim","cr_logg","cr_dmax","oo_logit","vig","onto","onto_sq","mo_clim","mo_logg","sigma","cr_sigGesp","cr_sigClesp",
-#             "cr_sigLoesp","cr_Clesp","cr_Clesp","cr_Loesp","mo_sigesp","mo_sigClesp",
-#             "mo_sigLoesp","mo_esp","mo_Clesp","mo_Loesp")
-#temps_depart <-Sys.time()
-#fitj_c <- stan('join_model4_multiesp.stan', data = dataj,chain=4,pars=pars_save,include=TRUE)
-#Sys.time()- temps_depart
-#save(fitj_c,file=paste('stan_sorties/stan_',code_esp_cible,'_join_multiesp_sortie.Rdata')) # voi debut du fichier stan pour les specificite
 
-chain<-fitj_mocr
+chain<-fitjm
+code_sim<-paste('stan_sorties/stan_',code_esp_cible,'_jo5_c2i2',sep="")
+tesp<-tesp %>% transmute(especes=idEsp,nesp=rank)
 
 # modèle de croissance seul ####
 
@@ -538,13 +536,13 @@ pars_save<-c("Ks","Dopt","sigma",
 
 temps_depart <-Sys.time()
 temps_depart
-fitj_cr <- stan('cr_model6_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
+fitj_cr <- stan('cr_model5_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
                 chain=2,
-                iter=4000,warmup=3000,
-                # control = list(adapt_delta = 0.99,max_treedepth = 15)
+                iter=4000,warmup=3000
                 )
 Sys.time()- temps_depart
-save(fitj_cr,parametres,pars_save,code_esp_cible,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_cr5_sortie_i4.Rdata'))
+save(fitj_cr,parametres,pars_save,code_esp_cible,tesp,
+     file=paste('stan_sorties/stan_',code_esp_cible,'_cr5_sortie_i4.Rdata'))
 
 chain<-fitj_cr
 code_sim<-paste('stan_sorties/stan_',code_esp_cible,'_cr5_i4')
@@ -561,8 +559,7 @@ temps_depart
 fitj_mo <- stan('mo_model5_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
                 chain=4,
                 iter=2000,warmup=1000,
-                # control = list(adapt_delta = 0.99,max_treedepth = 15)
-)
+               )
 Sys.time()- temps_depart
 save(fitj_mo,parametres,pars_save,code_esp_cible,tesp,file=paste('stan_sorties/stan_',code_esp_cible,'_mo5_ncl_sortie_i2.Rdata'))
 
@@ -1457,7 +1454,7 @@ chain_int<-chain_sel %>%
                      as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
   left_join(tesp,by="nesp")  
 
-ggplot(chain_logg) + 
+ggplot(chain_int) + 
   geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red")) +
   # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
   geom_vline(xintercept = 0, linetype = "solid")+
@@ -1465,7 +1462,7 @@ ggplot(chain_logg) +
   facet_wrap(~especes,scales="free")
 
 
-cr_int_pc_abs<-chain_logg %>% 
+cr_int_pc_abs<-chain_int %>% 
   group_by(especes) %>% 
   summarise(pc1_abs=quantile(Abs,probs=0.01),
             pc2_5_abs=quantile(Abs,probs=0.025),
@@ -1594,12 +1591,12 @@ save(mo_int_pc_abs,file=paste("PC_",code_esp_cible,"_mo5_i4_pc_IntAbs.Rdata",sep
 # graphe vulnérabilité ####
 load("PC_paracou30ncl_cr5_i4_pc_IntAbs.Rdata") # cr_int_pc_abs
 
-write.csv2(mo_clim_pc_abs,file="mo_clim_pc_abs.csv")
-write.csv2(cr_clim_pc_abs,file="cr_clim_pc_abs.csv")
-write.csv2(mo_logg_pc_abs,file="mo_logg_pc_abs.csv")
-write.csv2(cr_logg_pc_abs,file="cr_logg_pc_abs.csv")
-write.csv2(mo_int_pc_abs,file="mo_int_pc_abs.csv")
-write.csv2(cr_int_pc_abs,file="cr_int_pc_abs.csv")
+write.csv2(mo_clim_pc_abs,file=paste(code_esp_cible,"mo_clim_pc_abs.csv",sep=""),dec=".")
+write.csv2(cr_clim_pc_abs,file=paste(code_esp_cible,"cr_clim_pc_abs.csv",sep=""),dec=".")
+write.csv2(mo_logg_pc_abs,file=paste(code_esp_cible,"mo_logg_pc_abs.csv",sep=""),dec=".")
+write.csv2(cr_logg_pc_abs,file=paste(code_esp_cible,"cr_logg_pc_abs.csv",sep=""),dec=".")
+write.csv2(mo_int_pc_abs,file=paste(code_esp_cible,"mo_int_pc_abs.csv",sep=""),dec=".")
+write.csv2(cr_int_pc_abs,file=paste(code_esp_cible,"cr_int_pc_abs.csv",sep=""),dec=".")
 
 graphe_vuln<-function(tab_mo,tab_cr_,titre){
   Vuln4graph<-as.data.frame(matrix(data=NA,nrow=16,ncol=0))
