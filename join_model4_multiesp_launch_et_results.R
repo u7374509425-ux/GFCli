@@ -504,7 +504,7 @@ pars_save<-c("Ks","Dopt","sigma",
              "cr_clim","cr_Clesp","cr_sigClesp",
              "cr_logg","cr_sigLoesp","cr_Loesp",
              "oo_Gmax","cr_Gesp","cr_dmax","cr_sigGesp",
-             "oo_logit","mo_Ooesp","onto","onto_sq","mo_sigOoesp",
+             "oo_logit","mo_Ooesp","vig","onto","onto_sq","mo_sigOoesp",
              "mo_clim","mo_Clesp","mo_sigClesp",
              "mo_logg","mo_Loesp","mo_sigLoesp",
              "mo_int","mo_Inesp","mo_sigInesp")
@@ -513,7 +513,7 @@ temps_depart <-Sys.time()
 temps_depart
 fitjm <- stan('join_model5_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
                chain=2,
-               iter=2000,warmup=1000
+               iter=4000,warmup=3000
               )
 
 Sys.time()- temps_depart
