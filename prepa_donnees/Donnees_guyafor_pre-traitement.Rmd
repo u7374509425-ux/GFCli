@@ -69,7 +69,7 @@ Année la plus ancienne pour les donnee meteo : d'après les données à disposi
 nbmin_arbres <- 0 # nombre minimal d'individus par espece et par site
 nbmin_mes <- 3 # nombre minimal de mesure par arbre
 an_min_meteo<- 1968  # donnee meteo les plus anciennes
-fich_sauv_circ<-"Data_guyafor_16esp_Clc_join"  # nom du fichier de sortie
+fich_sauv_circ<-"Data_guyafor_mch_join"  # nom du fichier de sortie
 
 # choix des espèces
 espGFClim<-c(
@@ -159,7 +159,7 @@ tab_arbres<-tabMesures %>%
 ```
 
 ###3 Creation liste des site_traitements selectionnés
-Pour une espèce on ne conserve un site seulement s'il y a assez d'arbres. Pour rappel, le seuil se gère avec le paramètre "nbmin_arbres"
+Pour une espèce on ne conserve un site seulement s'il y a assez d'arbres. Pour rappel, le seuil se gère avec le paramètre "nbmin_arbres" 'par défaut nbmin_arbres=0
 
 ```{r l_site, echo=TRUE}
 tab_esp_site_logg<-tab_arbres %>%
@@ -330,11 +330,12 @@ datacr_sc<-tabMesuresSelect%>%
 
 datamo_sc<-tabMesuresSelect%>%
   arrange(idTree,CensusYear)%>%   # on trie par arbre et annee
-  select(idTree,idEsp,Diam,CodeAlive,CensusYear,CensusDate,Dmax95,Forest,Plot,idTraitement)%>%  # choix de quelques colonnes
+  select(idTree,idEsp,Diam,CodeAlive,CodeMeas,CensusYear,CensusDate,Dmax95,Forest,Plot,idTraitement)%>%  # choix de quelques colonnes
     # decalage vers le haut des colonnes diametre (-1), codeAlive (-2), pour creer des champs pour l'acroissement et le champs vivant/mort
-  mutate(Diam2=lead(Diam),CodeAlive3=lead(CodeAlive,2),idTree3=lead(idTree,2),Year2=lead(CensusYear),Year3=lead(CensusYear,2),CDate2=lead(CensusDate),CDate3=lead(CensusDate,2))%>% 
+  mutate(Diam2=lead(Diam),CodeAlive3=lead(CodeAlive,2),CodeMeas3=lead(CodeMeas,2),idTree3=lead(idTree,2),Year2=lead(CensusYear),Year3=lead(CensusYear,2),CDate2=lead(CensusDate),CDate3=lead(CensusDate,2))%>% 
   filter(idTree==idTree3)%>%    # on enleve les lignes qui avec des donnees de deux individus differents
-  select(idTree,idEsp,Diam1=Diam,Diam2,CodeAlive3,Year1=CensusYear,Year2,Year3,CDate1=CensusDate,CDate2,CDate3,Dmax95,Forest,Plot,idLogg=idTraitement)%>% # quelques nouveaux titres de colonne"
+  select(idTree,idEsp,Diam1=Diam,Diam2,
+         CodeAlive3,CodeMeas3,Year1=CensusYear,Year2,Year3,CDate1=CensusDate,CDate2,CDate3,Dmax95,Forest,Plot,idLogg=idTraitement)%>% # quelques nouveaux titres de colonne"
     # le diametre d'interet pour le modele demortalite est en n-1 avant l'evenement de mort ou de survie, creation to_death ( 1 = deces, 0= survie)
   mutate(AGR=(Diam2-Diam1)/(Year2-Year1),rdiam=Diam2/Dmax95,to_Death=if_else(CodeAlive3,0,1)) %>% 
   filter(AGR>=0) %>% # on suprimme les accroisssements negatifs
@@ -669,7 +670,7 @@ index_trait<-index_trait_mes %>%
   select(-CensusYear) %>% 
   spread(key=T_index, value=AGB_plot) %>%   # on crée des colonnes à partir de T_index et on y place les valeur de AGB
   filter((!is.na(PreLogg))&(!is.na(PostLogg))) %>%  # on supprime les dispositifs avec une seule date
-  mutate(IndexLogg=(1-PostLogg/PreLogg)*100)                 
+  mutate(IndexLogg=(1-PostLogg/PreLogg)*100)
  
 # hist(index_trait$AGB)
 # max(index_trait$AGB)
@@ -755,7 +756,9 @@ datamo_cl_lo<-datamo_cl %>%
   mutate(TxLogg=if_else(is.na(IndexLogg),1,IndexLogg)) %>% 
   left_join(select(cc_espGFClim,idEsp,WD),by="idEsp") # ajout des WD
 
-
+index_trait<-index_trait %>% 
+  left_join(select(DispoLogg,ForestPlot,NomForet,Libelle,Post_CY,Pre_CY),by="ForestPlot") %>% # on récupere les donnée année pre et post logg par parcele exploitée
+  rename(Forest=NomForet,Plot=Libelle)
 ```
 
 
@@ -781,6 +784,7 @@ save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
      file=paste(fich_sauv_circ,".Rdata",sep="")) #Data_guyafor_16esp_Clc_join.Rdata fichier avec donnée climat multisite, cavec date corrigées
 #Data_guyafor_16esp_Cl_join.Rdata fichier avec donnée climat multisite
 #"Data16esp_s0_to_join.Rdata") #"S0" pour seuil à 0 pour le nb minimal d'arbres par esp et par site, le 12/06/2019, avec le % de biomasse perdue sur IndexLogg
+# Data_guyafor_16esp_PPlogg_join pour ajout annee pre et post Logg sur indextrait
 
 # pour export vers Rstudio reseau
 save(nbmin_arbres,            # nombre minimal d'arbres par esp et par site
