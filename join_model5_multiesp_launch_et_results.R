@@ -31,7 +31,7 @@ Library(c("knitr","raster","tidyverse",
 
 
 # load("prepa_donnees/Data16esp_s0_to_join.Rdata") # issu de Donnees_guyafor-pre-traitement.Rmd
-load("prepa_donnees/Data_guyafor_16esp_PPlogg_join.Rdata")
+load("prepa_donnees/Data_guyafor_mch_join.Rdata")
 # metadata 
      #nbmin_arbres,            # nombre minimal d'arbres par esp et par site
      #nbmin_mes,               # nombre minimal de mesures par arbres
@@ -68,10 +68,12 @@ espliste<-espGFClim
 parametres<-c(FALSE,
               NA,
               FALSE,
+              FALSE,
               code_esp_cible) # valeur par défaut
 names(parametres)<-c("selparacou",
                      "pcpara",
                      "prelogg",
+                     "chablis",
                      "codeEsp")
 
 selparacou<-TRUE # selection de quelques données de Paracou 
@@ -80,7 +82,9 @@ pcpara<-30 #pourcentage final de donnée de paracou
 prelogg<-TRUE #exclusion de données pre-exploitation
 # sellogg<-TRUE # exclusion des dispositifs sans exploitation
 
-code_sorties<-"paracou30ncl_pLogg"
+chablis<-TRUE # exclusion des chablis primaires et secondaires 
+
+code_sorties<-"paracou30ncl_mch"
 
 datacr_s<-datacr_cl_lo
 datamo_s<-datamo_cl_lo
@@ -124,9 +128,23 @@ nrow(datacr_s)-nbl_cr
 nrow(datamo_s)-nbl_mo
 nbl_cr<-nrow(datacr_s)
 nbl_mo<-nrow(datamo_s)
+nbl_mo_mort<-nrow(datamo_s[datamo_s$to_Death==1,])
 nbl_cr
 nbl_mo
+nbl_mo_mort
 
+if (chablis) {
+  parametres["chablis"]<-chablis
+  datamo_s<-datamo_s %>% 
+    filter(!((to_Death==1)&((CodeMeas3==6)|(CodeMeas3==7))))
+  code_esp_cible<-code_sorties
+}
+"perte après chablis"
+nrow(datamo_s)-nbl_mo
+nbl_mo<-nrow(datamo_s)
+nbl_mo_mort<-nrow(datamo_s[datamo_s$to_Death==1,])
+nbl_mo
+nbl_mo_mort
 
 if (selparacou) { 
   parametres["selparacou"]<-selparacou
@@ -137,8 +155,8 @@ if (selparacou) {
     filter(Forest!="Paracou") %>% 
     group_by(idTree) %>% 
     summarise(nbmes=n()) %>% 
-    summarise(nbtree_cr=n(),nb_acc=sum(nbmes)) %>% 
-    mutate(rmes_cr=round(nb_acc/nbtree_cr))
+    summarise(nbtree_cr=n(),nb_cr=sum(nbmes)) %>% 
+    mutate(rmes_cr=round(nb_cr/nbtree_cr))
   
   rtreemes<-datamo_s%>%
     filter(Forest!="Paracou") %>% 
@@ -148,76 +166,96 @@ if (selparacou) {
     mutate(rmes_mo=round(nb_mo/nbtree_mo)) %>% 
     bind_cols(rtreemes_cr) 
   
-  if (rtreemes$nb_acc/nrow(datacr_s)<(100-pcpara)/100){ # test proportion d'accroissement de paracou supérieur à la proportion souhaitee
+  if (rtreemes$nb_cr/nrow(datacr_s)>(pcpara/100)){ # test proportion d'accroissement de paracou supérieur à la proportion souhaitee
  
+  ##croissance  
   #calcul du nombre d'individus de paracou nécessaire pour avoir la proportion souhaitee
-  paratree_cr<-round((rtreemes$nb_acc)*pcpara/(100-pcpara)/rtreemes$rmes_cr)
-  paratree_mo<-round(rtreemes$nb_mo*pcpara/(100-pcpara)/rtreemes$rmes_mo)
+  paratree_cr<-round((rtreemes$nb_cr)/rtreemes$rmes_cr*pcpara/(100-pcpara))
   parames_cr<-paratree_cr*rtreemes$rmes_cr
-  parames_mo<-paratree_mo*rtreemes$rmes_mo
   
   #selection des arbres de paracou 
   Treeselpara_cr<-datacr_s %>%
     filter(Forest=="Paracou") %>% 
     group_by(idTree) %>% 
     summarise(nb_mes=n()) %>% 
-    filter(nb_mes>=rtreemes$rmes_cr) %>% # on enlève recruts et arbres pas assez inventoriés
     dplyr::select(idTree) 
-
-  Treeselpara_mo<-datamo_s %>%
-    filter(Forest=="Paracou") %>% 
-    group_by(idTree) %>% 
-    summarise(nb_mes=n()) %>% 
-    filter(nb_mes>=rtreemes$rmes_mo) %>% # on enlève recruts et arbres pas assez inventoriés
-    dplyr::select(idTree) 
-  
-  # choix des arbres de paracou 
  
-  ligne_cr<-unique(runif(paratree_cr,1,nrow(Treeselpara_cr)))  # unique pour eviter les doublons car tirage avec remise
-  ligne_cr<-unique(c(ligne_cr,runif(paratree_cr-length(ligne_cr),1,nrow(Treeselpara_cr))))  
-  Treeselpara_cr<-Treeselpara_cr %>% slice(ligne_cr)
-  
-  ligne_mo<-unique(runif(paratree_mo,1,nrow(Treeselpara_mo)))  
-  ligne_mo<-unique(c(ligne_mo,runif(paratree_mo-length(ligne_mo),1,nrow(Treeselpara_mo))))  
-  Treeselpara_mo<-Treeselpara_mo %>% slice(ligne_mo)
+  Treeselpara_cr<-Treeselpara_cr %>% 
+    sample_n(min(paratree_cr,nrow(Treeselpara_cr)),replace=FALSE) # choix par les arbres de Paracou sans remise
 
-  # selection des données
-  datacr_par<-datacr_s %>% semi_join(Treeselpara_cr,by="idTree")
-   ligne_cr_mes<-unique(runif(parames_cr,1,nrow(datacr_par)))  
-   ligne_cr_mes<-unique(c(ligne_cr_mes,
-                          runif(parames_cr-length(ligne_cr_mes),1,nrow(datacr_par))))  
-   datacr_par<-datacr_par %>% slice(ligne_cr_mes) # choix parmis toutes les mesures, esperance nbmes/tree correct
-
-   # test<-datacr_par %>% 
-   #   group_by(idTree) %>% 
-   #   summarise(nb_acc=n())
-   # median(test$nb_acc)
+  datacr_par<-datacr_s %>% 
+    semi_join(Treeselpara_cr,by="idTree") %>% 
+    sample_n(parames_cr,replace = FALSE) # choix parmis toutes les mesures, 
   
-   datamo_par<-datamo_s %>% semi_join(Treeselpara_mo,by="idTree")
-   ligne_mo_mes<-unique(runif(parames_mo,1,nrow(datamo_par)))  
-   ligne_mo_mes<-unique(c(ligne_mo_mes,
-                         runif(parames_mo-length(ligne_mo_mes),1,nrow(datamo_par))))  
-   datamo_par<-datamo_par %>% slice(ligne_mo_mes)
-  
- 
   # ajout des donnée de Paracou
   datacr_s<-datacr_s %>% 
     filter(Forest!="Paracou") %>% 
     bind_rows(datacr_par) 
+   
+   
+     
+  ##mortalité  
+  #calcul du nombre d'individus de paracou nécessaire pour avoir la proportion souhaitee
+  paratree_mo<-round(rtreemes$nb_mo/rtreemes$rmes_mo*pcpara/(100-pcpara))
+  parames_mo<-paratree_mo*rtreemes$rmes_mo
+  
 
+  # recensement les arbres qui meurent effectivement sur Paracou
+  tree_to_death<-datamo_s %>%
+    filter((Forest=="Paracou") & (to_Death==1))
+
+  #selection des arbres de paracou 
+  Treeselpara_mo<-datamo_s %>%
+    filter(Forest=="Paracou") %>% 
+    group_by(idTree) %>% 
+    summarise(nb_mes=n()) %>% 
+    dplyr::select(idTree) %>%            
+    anti_join(tree_to_death,by="idTree") # on enlève les acc avec des arbres qui meurent 
+  
+
+  paratree_mo<-paratree_mo-nrow(tree_to_death) # recalcul du nombre d'arbres nécessaire
+  parames_mo<-parames_mo-(rtreemes$rmes_mo*nrow(tree_to_death)) # recalcul du nombre d'accroissement nécessaire
+  # on ne prends que le nombre moyens d'acroissement par arbres car si on prends tous les acc des arbres qui meurent on peut dépasser le nombre de mesures necessaire
+
+  # choix des arbres de paracou 
+  # choix des acc non mortels parmi les arbres qui meurent
+  datamo_par_mort<-datamo_s %>% 
+    semi_join(tree_to_death,by="idTree") %>% 
+    filter(to_Death==0) %>%  # acc des arbres qui meurent sans les acc mortels
+    sample_n((rtreemes$rmes_mo-1)*nrow(tree_to_death),replace = FALSE) %>%  #nb choix d'acc vaut rmes_mo en comptant les acc mortel
+    bind_rows(tree_to_death) # ajout acc mortels
+  
+  Treeselpara_mo<-Treeselpara_mo %>% 
+    sample_n(paratree_mo, replace = FALSE)  # choix du reste des arbres necessaires
+
+  datamo_par<-datamo_s %>% 
+    semi_join(Treeselpara_mo,by="idTree") %>% 
+    sample_n(parames_mo,replace=FALSE) %>% #choix des mesures
+    bind_rows(datamo_par_mort) # ajout des arbres qui meurent et de leurs mesures
+ 
+
+   test<-datamo_par %>%
+     group_by(idTree) %>%
+     summarise(nb_acc=n())
+   median(test$nb_acc)
+   sum(test$nb_acc)
+ 
   datamo_s<-datamo_s %>% 
     filter(Forest!="Paracou") %>% 
-   bind_rows(datamo_par) 
+    bind_rows(datamo_par) 
   }
 }
 "perte après selparacou"
 nrow(datacr_s)-nbl_cr
 nrow(datamo_s)-nbl_mo
+nrow(datamo_s[datamo_s$to_Death==1,])-nbl_mo_mort
+
 nbl_cr<-nrow(datacr_s)
 nbl_mo<-nrow(datamo_s)
+nbl_mo_mort<-nrow(datamo_s[datamo_s$to_Death==1,])
 nbl_cr
 nbl_mo
-
+nbl_mo_mort
 
 
 ##3 Centrage et réduction des variables Logg et climat
@@ -1443,8 +1481,7 @@ ggplot(data=Vuln4graph, aes(x=VulnMmed, y=VulnGmed, col=Species, label=Species,a
 #   theme_bw() + theme(legend.position = "none") + theme(text = element_text(size=25))
 
 
-### graphe interactions ####
-# graphe indices REW journaliers ####
+## 10 graphe indices REW journaliers ####
 clim_site<-REW_sites_gfclim %>%  # REW_sites_gfclim est issu du ficher Donnees_guyafor_pre-traitement.Rmd
   mutate(REW04=ifelse(REW>=0.4,NA,REW)) %>% 
   filter(Forest=="Organabo") %>% # choix du site
