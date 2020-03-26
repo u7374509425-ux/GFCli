@@ -138,12 +138,12 @@ model {                            // Model block
   mo_logg ~ normal(0,100);   // priors
   mo_int ~ normal(0,100);   // priors
   sigma ~ normal(0,5);       // priors toncature min sur 0
-  cr_sigGesp ~ normal(0,5);       // priors toncature min sur 0
+  cr_sigGesp ~ normal(0,3);       // priors toncature min sur 0, cf stan_paracou30ncl_pLogg_jo5_c4i4_postnonspe.png
   cr_sigClesp ~ normal(0,5);       // priors toncature min sur 0
   cr_sigLoesp ~ normal(0,2);      // priors toncature min sur 0
   cr_sigInesp ~ normal(0,2);       // priors toncature min sur 0
   mo_sigOoesp ~ normal(0,5);       // priors toncature min sur 0
-  mo_sigClesp ~ normal(0,5);       // priors toncature min sur 0
+  mo_sigClesp ~ normal(0,3);       // priors toncature min sur 0 cf stan_paracou30ncl_pLogg_jo5_c4i4_postnonspe.png
   mo_sigLoesp ~ normal(0,5);       // priors toncature min sur 0
   mo_sigInesp ~ normal(0,5);       // priors toncature min sur 0
 
