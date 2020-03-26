@@ -166,7 +166,7 @@ if (selparacou) {
     mutate(rmes_mo=round(nb_mo/nbtree_mo)) %>% 
     bind_cols(rtreemes_cr) 
   
-  if (rtreemes$nb_cr/nrow(datacr_s)>(pcpara/100)){ # test proportion d'accroissement de paracou supérieur à la proportion souhaitee
+  if (rtreemes$nb_cr/nrow(datacr_s)<((100-pcpara)/100)){ # test proportion d'accroissement de paracou supérieur à la proportion souhaitee
  
   ##croissance  
   #calcul du nombre d'individus de paracou nécessaire pour avoir la proportion souhaitee
@@ -487,7 +487,7 @@ code_sim<-paste('stan_',code_esp_cible,'_mo5_i2')
 tesp<-tesp %>% transmute(especes=idEsp,nesp=rank)
 
 
-## vecteurs de  sous ensembles de paramètres ####
+## calcul vecteurs de  sous ensembles de paramètres ####
 cr_Gesp_multi<-paste("cr_Gesp[",1:nrow(tesp),"]",sep="")
 cr_Clesp_multi<-paste("cr_Clesp[",1:nrow(tesp),"]",sep="")
 cr_Loesp_multi<-paste("cr_Loesp[",1:nrow(tesp),"]",sep="")
@@ -528,10 +528,10 @@ pars_mo_all<-unique(c(pars_mo1,pars_moOo,pars_moCl,pars_moLogg,pars_moInt))
 print(chain, pars = pars_save) 
 
 ## 2 Traces des chaines ####
-traceplot(chain, pars=c("lp__")) # plot les chaines dela vraisemblance
+traceplot(chain, pars=c("lp__")) # plot les chaines de la vraisemblance
 nrtg<-ifelse(mtype=="joint",12,6)
 traceplot(chain, pars=pars_save, nrow=nrtg) # nrow : nombre de lignes de graphe
-
+traceplot(chain,pars=pars_mo1)
 ## 3 calculs : création sortie en format df et pour ggplot - choix éventuel de chaines ####
 
 chain_to_df<-function (chain_ini){
@@ -610,8 +610,8 @@ poster_gg <-function (vectorpars,legende){
     facet_wrap(~especes_var,scales="free")
 }
 
-test<-chain_ggpl %>% 
-  filter(substr(variables,1,5)=="cr_In")
+# test<-chain_ggpl %>% 
+#   filter(substr(variables,1,5)=="cr_In")
 
 poster_gg(pars_cr1,"paramètres non spécifiques")
 poster_gg(pars_crG,"paramètre de l'ordonnée à l'origine")
