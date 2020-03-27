@@ -402,8 +402,8 @@ code_esp_cible
     rgEsp_mo = datamo$EspRank        # rang des espece dans la liste des espece pour la mortalité
   )
 
-  save(dataj,parametres,tesp,code_esp_cible,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata'))
-  save(dataj,parametres,tesp,code_esp_cible,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data2.Rdata'),version=2)  # pour export vers Rstudio serveur
+  save(dataj,parametres,tesp,code_esp_cible,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata',sep=""))
+  save(dataj,parametres,tesp,code_esp_cible,file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data2.Rdata',sep=""),version=2)  # pour export vers Rstudio serveur
   
 #### C- Lancement des chaines et étude de convergence ####
 
@@ -423,19 +423,19 @@ mtype<-"joint"
 temps_depart <-Sys.time()
 temps_depart
 fitjm <- stan('join_model5_multiesp.stan', data = dataj,pars=pars_save,include=TRUE,
-               chain=2,
-               iter=4000,warmup=3000
+               chain=4,
+               iter=8000,warmup=7000
               )
 
 Sys.time()- temps_depart
 save(fitjm,parametres,pars_save,code_esp_cible,tesp,mtype,
-     file=paste('stan_sorties/stan_',code_esp_cible,'_jo5_sortie_c2i2.Rdata',sep="")) # voir debut du fichier stan pour les specificite
+     file=paste('stan_sorties/stan_',code_esp_cible,'_jo5_sortie_c4i8.Rdata',sep="")) # voir debut du fichier stan pour les specificite
 
 
 chain<-fitjm
 mtype<-"joint"
-code_sim<-paste('stan_',code_esp_cible,'_jo5_c2i2',sep="")
-# tesp<-tesp %>% transmute(especes=idEsp,nesp=rank)
+code_sim<-paste('stan_',code_esp_cible,'_jo5_c4i4',sep="")
+tesp<-tesp %>% transmute(especes=idEsp,nesp=rank)
 
 # modèle de croissance seul ####
 
@@ -613,19 +613,19 @@ poster_gg <-function (vectorpars,legende){
 # test<-chain_ggpl %>% 
 #   filter(substr(variables,1,5)=="cr_In")
 
-poster_gg(pars_cr1,"paramètres non spécifiques")
-poster_gg(pars_crG,"paramètre de l'ordonnée à l'origine")
-poster_gg(pars_crLogg,"paramètre exploitation")
-poster_gg(pars_crCl,"paramètres climat")
-poster_gg(pars_crInt,"paramètres interactions Climat et exploitation")
+if(mtype=="croiss") poster_gg(pars_cr1,"Paramètres non spécifiques")
+# poster_gg(pars_crG,"Paramètres de l'ordonnée à l'origine - croissance")
+# poster_gg(pars_crLogg,"Paramètres exploitation - croissance")
+# poster_gg(pars_crCl,"Paramètres climat - croissance")
+# poster_gg(pars_crInt,"Paramètres interactions Climat et exploitation - croissance")
 
-poster_gg(pars_mo1,"paramètres non spécifiques")
-poster_gg(pars_moOo,"paramètre de l'ordonnée à l'origine")
-poster_gg(pars_moLogg,"paramètre exploitation")
-poster_gg(pars_moCl,"paramètres climat")
-poster_gg(pars_moInt,"paramètres interaction climat et exploitation")
+if(mtype=="morta") poster_gg(pars_mo1,"Paramètres non spécifiques")
+# poster_gg(pars_moOo,"Paramètres de l'ordonnée à l'origine - mortalité")
+# poster_gg(pars_moLogg,"Paramètres exploitation - mortalité")
+# poster_gg(pars_moCl,"Paramètres climat - mortalité")
+# poster_gg(pars_moInt,"Paramètres interaction climat et exploitation - mortalité")
 
-poster_gg(c(pars_cr1,pars_mo1),"paramètres non spécifiques modèle joint")
+if(mtype=="joint") poster_gg(c(pars_cr1,pars_mo1),"Paramètres non spécifiques modèle joint")
 
 
 ## 7 calculs Predictions et graphe de sortie ####
@@ -634,6 +634,8 @@ temp<-chain_sel %>%
 param<-apply(temp,2,median) # on extrait les médianes des paramètres
 names(param)<-colnames(temp)
 load(file=paste('stan_sorties/stan_',code_esp_cible,'_multisite_vcr_data.Rdata',sep=""))
+tesp<-tesp %>% transmute(especes=idEsp,nesp=rank)
+
 
 ###1 calcul des prédictions pour chaque observé ####
 
@@ -652,7 +654,7 @@ if (mtype %in% c("croiss","joint")){
 ggplot(donnee_cr) +
   geom_point(aes(x=dbh_cr/dbhmax_cr,y=log(Acc_cr+1))) +
   geom_line (aes(x=dbh_cr/dbhmax_cr,y=pred),color="red",size=1) +
-  facet_wrap(~especes)+
+  facet_wrap(~especes,nrow = 3)+
   labs(title="Modèle de croissance",x="diam/dmax",y="Log(Acc+1)")
 }
 
@@ -693,8 +695,8 @@ if (mtype=="morta"){
   labs(title="Modèle de mortalité",x="individu",y="proba mort")
  
  ggplot(logitm1_pc) +
-  geom_line (aes(x=quantile,y=morts,color="red"),size=1) +
-  geom_line (aes(x=quantile,y=vivants,color="blue"),size=1)+
+  geom_line (aes(x=quantile,y=morts,color="morts"),size=1) +
+  geom_line (aes(x=quantile,y=vivants,color="vivants"),size=1)+
   labs(title="Modèle de mortalité",x="quantile population",y="proba mort")
  
 }
@@ -732,8 +734,9 @@ if (mtype=="joint"){
  logitm1_pc<-data.frame(matrix(data=NA,nrow=50,ncol=3)) # construction des abscisses
  colnames(logitm1_pc)<-c("quantile","morts","vivants")
  logitm1_pc$quantile<-seq(0.02,1,by=0.02)
- 
-  for(p in 1:nrow(logitm1_pc)){
+  
+  # calcul de la proba de mort par quantile des population de morts (accroissement mortel) et de vivants (acc non mortel)
+  for(p in 1:nrow(logitm1_pc)){ 
   logitm1_pc$morts[p]<-quantile(donnee_jo_logit$logitm1[donnee_jo_logit$morts==1],
                                 probs=logitm1_pc$quantile[p])
   logitm1_pc$vivants[p]<-quantile(donnee_jo_logit$logitm1[donnee_jo_logit$morts==0],
@@ -748,8 +751,8 @@ if (mtype=="joint"){
  
 
  ggplot(logitm1_pc) +
-  geom_line (aes(x=quantile,y=morts,color="red"),size=1) +
-  geom_line (aes(x=quantile,y=vivants,color="blue"),size=1) +
+  geom_line (aes(x=quantile,y=morts,color="mort"),size=1) +
+  geom_line (aes(x=quantile,y=vivants,color="vivants"),size=1) +
    labs(title="Modèle de mortalité",x="quantile population",y="proba mort")
  
 }
@@ -870,7 +873,6 @@ Fpred_mo_inter<-function(i,param,mo_dataClim,mo_dataLogg,mo_datamed){
            param["mo_int"]*mo_dataClim[i]*mo_dataLogg[i])
   
 }
-
 
 ## tableau d'initialisation boucle pred_cr ####
 vparam<-chain_sel %>% 
@@ -1245,14 +1247,16 @@ ggplot(pred_pc_nonspe,aes(x=Loggs,y=Clims,z=predictions))+
                # 
 
 
-## 8 tableau paramètres ####
-poster_abs<-function(chaine,legende){
+## 8 Posterior et tableau quantile par espèce####
+poster_abs<-function(chaine,legende,nomfich,largeur,hauteur){
   ggplot(chaine) + 
-    geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red")) +
+    geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red"),size=1) +
     # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
     geom_vline(xintercept = 0, linetype = "solid")+
     xlab(legende) +
+    theme(legend.position="none")+
     facet_wrap(~especes,scales="free")
+  ggsave(filename =nomfich,width = largeur,height = hauteur )
   
 }
 
@@ -1298,15 +1302,14 @@ if(mtype%in%c("croiss","joint")){
                             as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
      left_join(tesp,by="nesp")  
 
-  poster_abs(chain_clim,"Paramètres Clim croissance")
-  cr_clim_pc_abs<-tab_spe(chain_clim)
+  poster_abs(chain_clim,"Paramètres Climat modèle de croissance",
+             paste(code_sim,"_cr_climAbs.png",sep=""),10,7)
   
+  cr_clim_pc_abs<-tab_spe(chain_clim)
   cr_pc_nonspe<-tab_nonspe(chain_ggpl,pars_cr1)
 
-  save(cr_clim_pc_abs,file=paste("PC_",code_sim,"_cr_climAbs.Rdata",sep=""))
-  write.csv2(cr_clim_pc_abs,file=paste(code_sim,"_cr_clim_pc_abs.csv",sep=""),dec=".")
-  save(cr_pc_nonspe,file=paste("PC_",code_sim,"_nonspe.Rdata",sep=""))
-  write.csv2(cr_pc_nonspe,file=paste(code_sim,"_nonspe.csv",sep=""),dec=".")
+  write.csv2(cr_clim_pc_abs,file=paste(code_sim,"_cr_clim_pc_abs.csv",sep=""))
+  write.csv2(cr_pc_nonspe,file=paste(code_sim,"_nonspe.csv",sep=""))
   
 # logg
   chain_logg<-chain_sel %>% 
@@ -1321,10 +1324,10 @@ if(mtype%in%c("croiss","joint")){
                      as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
    left_join(tesp,by="nesp")  
 
-  poster_abs(chain_logg,"Paramètres Logg croissance")
-  cr_logg_pc_abs<-tab_spe(chain_logg)
+  poster_abs(chain_logg,"Paramètres exploitation modèle de croissance",
+             paste(code_sim,"_cr_loggAbs.png",sep=""),10,7)
   
-  save(cr_logg_pc_abs,file=paste("PC_",code_sim,"_cr_LoggAbs.Rdata",sep=""))
+  cr_logg_pc_abs<-tab_spe(chain_logg)
   write.csv2(cr_logg_pc_abs,file=paste(code_sim,"_cr_logg_pc_abs.csv",sep=""),dec=".")
 
   # interaction clima_Logg
@@ -1340,18 +1343,14 @@ if(mtype%in%c("croiss","joint")){
                      as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
    left_join(tesp,by="nesp")  
 
-  poster_abs(chain_int,"Paramètres int croissance")
+  poster_abs(chain_int,"Paramètres d'interaction modèle de croissance",
+             paste(code_sim,"_cr_intAbs.png",sep=""),10,7)
+  
   cr_int_pc_abs<-tab_spe(chain_int)
   
- ggplot(chain_int) + 
-  geom_freqpoly(aes(x=Abs,binwidth=0.015,color="red")) +
-  # geom_freqpoly(aes(x=valeurs,binwidth=0.015),size=1,color="red") +
-  geom_vline(xintercept = 0, linetype = "solid")+
-  xlab("Paramètres Logg croissance") +
-  facet_wrap(~especes,scales="free")
-
-  save(cr_int_pc_abs,file=paste("PC_",code_sim,"_cr_IntAbs.Rdata",sep=""))
   write.csv2(cr_int_pc_abs,file=paste(code_sim,"_cr_int_pc_abs.csv",sep=""),dec=".")
+  save(cr_pc_nonspe,cr_clim_pc_abs,cr_logg_pc_abs,cr_int_pc_abs,file=paste(code_sim,"_tabpc_cr.Rdata",sep=""))
+
 }
 if(mtype%in%c("morta","joint")){
 ## Climat
@@ -1367,14 +1366,14 @@ if(mtype%in%c("morta","joint")){
                      as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
    left_join(tesp,by="nesp")  
 
-  poster_abs(chain_clim,"Paramètres Clim mortalité")
+  poster_abs(chain_clim,"Paramètres Climat modèle de mortalité",
+             paste(code_sim,"_mo_climAbs.png",sep=""),10,7)
+  
   mo_clim_pc_abs<-tab_spe(chain_clim)
 
   mo_pc_nonspe<-tab_nonspe(chain_ggpl,pars_mo1)
 
-  save(mo_clim_pc_abs,file=paste("PC_",code_sim,"_mo_ClimAbs.Rdata",sep=""))
   write.csv2(mo_clim_pc_abs,file=paste(code_sim,"_mo_clim_pc_abs.csv",sep=""),dec=".")
-  save(mo_pc_nonspe,file=paste("PC_",code_sim,"_nonspe.Rdata",sep=""))
   write.csv2(mo_pc_nonspe,file=paste(code_sim,"_nonspe.csv",sep=""),dec=".")
   
 # logg
@@ -1390,11 +1389,12 @@ if(mtype%in%c("morta","joint")){
                      as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
    left_join(tesp,by="nesp")  
 
-  poster_abs(chain_logg,"Paramètres Logg mortalité")
+  poster_abs(chain_logg,"Paramètres exlpoitation modèle de mortalité",
+             paste(code_sim,"_mo_loggAbs.png",sep=""),10,7)
   mo_logg_pc_abs<-tab_spe(chain_logg)
 
-  save(mo_logg_pc_abs,file=paste("PC_",code_sim,"_mo_LoggAbs.Rdata",sep=""))
   write.csv2(mo_logg_pc_abs,file=paste(code_sim,"_mo_logg_pc_abs.csv",sep=""),dec=".")
+ 
 
 # interaction climat Logg
 
@@ -1410,11 +1410,13 @@ if(mtype%in%c("morta","joint")){
                      as.numeric(substr(variables,nchar(variables)-2,nchar(variables)-1)))) %>% 
    left_join(tesp,by="nesp")  
 
-  poster_abs(chain_int,"Paramètres Interaction mortalité")
+  poster_abs(chain_int,"Paramètres Interaction modèle de mortalité",
+             paste(code_sim,"_mo_loggAbs.png",sep=""),10,7)
   mo_int_pc_abs<-tab_spe(chain_int)
-
-  save(mo_int_pc_abs,file=paste("PC_",code_sim,"_mo_IntAbs.Rdata",sep=""))
+  
   write.csv2(mo_int_pc_abs,file=paste(code_sim,"_mo_int_pc_abs.csv",sep=""),dec=".")
+  
+  save(mo_pc_nonspe,mo_clim_pc_abs,mo_logg_pc_abs,mo_int_pc_abs,file=paste(code_sim,"_tabpc_mo.Rdata",sep=""))
 }
 
 ## 9 graphe vulnérabilité ####
@@ -1442,33 +1444,31 @@ graphe_vuln<-function(tab_mo,tab_cr_,titre){
     ggtitle(titre)+ theme(plot.title = element_text(size=15,hjust=0.55))
 }
 
+load(paste(code_sim,"_tabpc_mo.Rdata",sep="")) 
+load(paste(code_sim,"_tabpc_cr.Rdata",sep="")) 
+
 #climat
-load(paste("PC_",code_sim,"_mo_climAbs.Rdata",sep="")) # mo_clim_pc_abs
-load(paste("PC_",code_sim,"_cr_ClimAbs.Rdata",sep="")) # cr_clim_pc_abs
-graphe_vuln(mo_clim_pc_abs,cr_clim_pc_abs,"Effet du Stress Hydrique")
-
-
+graphe_vuln(mo_clim_pc_abs,cr_clim_pc_abs,"Effet du Stress Hydrique morts sur pied")
+ggsave(filename = paste(code_sim,"_vuln_clim.png",sep=""),width=10,height=7)
 #logg
-load(paste("PC_",code_sim,"_mo_LoggAbs.Rdata",sep="")) # mo_logg_pc_abs
-load(paste("PC_",code_sim,"_cr_LoggAbs.Rdata",sep="")) # cr_logg_pc_abs
-graphe_vuln(mo_logg_pc_abs,cr_logg_pc_abs,"Effet de l'exploitation")
+graphe_vuln(mo_logg_pc_abs,cr_logg_pc_abs,"Effet de l'exploitation morts sur pied")
+ggsave(filename = paste(code_sim,"_vuln_logg.png",sep=""),width=10,height=7)
 
 #int
-load(paste("PC_",code_sim,"_mo_IntAbs.Rdata",sep="")) # mo_logg_pc_abs
-load(paste("PC_",code_sim,"_cr_ClimAbs.Rdata",sep="")) # cr_logg_pc_abs
-graphe_vuln(mo_int_pc_abs,cr_int_pc_abs,"Effet de l'interaction")
+graphe_vuln(mo_int_pc_abs,cr_int_pc_abs,"Effet de l'interaction morts sur pied")
+ggsave(filename = paste(code_sim,"_vuln_int.png",sep=""),width=10,height=7)
 
 # plot
-ggplot(data=Vuln4graph, aes(x=VulnMmed, y=VulnGmed, col=Species, label=Species,alpha=1),alpha=1) +
-  geom_hline(yintercept = 0, linetype = "dashed") + geom_vline(xintercept = 0, linetype = "dashed") +
-  geom_pointrange(aes(ymin=VulnGmedlow, ymax=VulnGmedhigh, col=Species),
-                  size=0.5,alpha=0.5, linetype = "solid") +
-  geom_errorbarh(aes(xmin= VulnMmedlow, xmax=VulnMmedhigh, col=Species),
-                 height = 0, size=0.5,alpha=0.5, linetype = "solid") +
-  xlab("Impact sur la mortalité") + ylab("Impact sur la croissance") + 
-  theme_bw() + theme(text = element_text(size=15))+
-  ggtitle("Effet du stress hydrique")+ theme(plot.title = element_text(size=15,hjust=0.55))
-    
+# ggplot(data=Vuln4graph, aes(x=VulnMmed, y=VulnGmed, col=Species, label=Species,alpha=1),alpha=1) +
+#   geom_hline(yintercept = 0, linetype = "dashed") + geom_vline(xintercept = 0, linetype = "dashed") +
+#   geom_pointrange(aes(ymin=VulnGmedlow, ymax=VulnGmedhigh, col=Species),
+#                   size=0.5,alpha=0.5, linetype = "solid") +
+#   geom_errorbarh(aes(xmin= VulnMmedlow, xmax=VulnMmedhigh, col=Species),
+#                  height = 0, size=0.5,alpha=0.5, linetype = "solid") +
+#   xlab("Impact sur la mortalité") + ylab("Impact sur la croissance") + 
+#   theme_bw() + theme(text = element_text(size=15))+
+#   ggtitle("Effet du stress hydrique")+ theme(plot.title = element_text(size=15,hjust=0.55))
+#     
 # geom_label(data=dta_label,aes(x=Cx,y=Cy,label=Clabel))
 
 # plot
@@ -1506,12 +1506,12 @@ ggplot(datacr_gg, aes(diam_1, log(AGR1+1))) +
   geom_line(aes(y = predict(datacr[,"diam_1"],var1[,1])), col = "red")
 
 
--	Pour déclarer où est C++14, il te faut un fichier Makevars.win, et le remplir :
-  https://community.rstudio.com/t/error-in-shlib-internal-args-c-14-standard-requested-but-cxx14-is-not-defined/16819/2,
-cf la contribution de Mara
--	Pour savoir où est ton Makevars, utiliser les commandes tools::makevars_user() et tools::makevars_site() 
-https://stackoverflow.com/questions/43597632/understanding-the-contents-of-the-makevars-file-in-r-macros-variables-r-ma. 
-Sur mon ordinateur, il n’y en a pas mais je n’utilise pas RStan. C’est dans un de ces fichiers que l’emplacement de C++ est enregistré, dans la « variable » CXX14.
+# -	Pour déclarer où est C++14, il te faut un fichier Makevars.win, et le remplir :
+#   https://community.rstudio.com/t/error-in-shlib-internal-args-c-14-standard-requested-but-cxx14-is-not-defined/16819/2,
+# cf la contribution de Mara
+# -	Pour savoir où est ton Makevars, utiliser les commandes tools::makevars_user() et tools::makevars_site() 
+# https://stackoverflow.com/questions/43597632/understanding-the-contents-of-the-makevars-file-in-r-macros-variables-r-ma. 
+# Sur mon ordinateur, il n’y en a pas mais je n’utilise pas RStan. C’est dans un de ces fichiers que l’emplacement de C++ est enregistré, dans la « variable » CXX14.
 
 pb <- txtProgressBar(min = 0, max = total, style = 3)
 i=0
