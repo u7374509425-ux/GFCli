@@ -877,15 +877,15 @@ test_date<-tabMesuresSelect %>%
 test_date2<-tabMesuresSelect %>% 
   arrange(desc(CensusDate))
 
-test_yeardate<-Paracou_upto2018 %>%  
-  select(Forest,CensusYear,CensusDate) %>% 
-  distinct() %>% 
-  mutate(CDyear=as.numeric(format(as.Date(CensusDate,"%Y-%m-%d"),format = "%Y"))) %>% 
-  mutate(CDmonth=as.numeric(format(as.Date(CensusDate,"%Y-%m-%d"),format = "%m"))) %>% 
-  mutate(test_year=abs(CensusYear-CDyear)) %>% 
-  filter(test_year>0) %>% 
-  arrange(desc(test_year)) 
-save(test_yeardate,file="test_yeardate_guyafor.Rdata")
+# test_yeardate<-Paracou_upto2018 %>%  
+#   select(Forest,CensusYear,CensusDate) %>% 
+#   distinct() %>% 
+#   mutate(CDyear=as.numeric(format(as.Date(CensusDate,"%Y-%m-%d"),format = "%Y"))) %>% 
+#   mutate(CDmonth=as.numeric(format(as.Date(CensusDate,"%Y-%m-%d"),format = "%m"))) %>% 
+#   mutate(test_year=abs(CensusYear-CDyear)) %>% 
+#   filter(test_year>0) %>% 
+#   arrange(desc(test_year)) 
+# save(test_yeardate,file="test_yeardate_guyafor.Rdata")
 
 zoom_yeardate<-dispoGuyafor %>%
   filter(Forest=="BAFOG" & CensusYear==2002 &CensusDate=="2006-03-15") %>% 
