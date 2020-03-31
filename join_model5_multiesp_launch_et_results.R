@@ -434,7 +434,7 @@ save(fitjm,parametres,pars_save,code_esp_cible,tesp,mtype,
 
 chain<-fitjm
 mtype<-"joint"
-code_sim<-paste('stan_',code_esp_cible,'_jo5_c4i4',sep="")
+code_sim<-paste('stan_',code_esp_cible,'_jo5_c4i8',sep="")
 tesp<-tesp %>% transmute(especes=idEsp,nesp=rank)
 
 # modèle de croissance seul ####
@@ -531,7 +531,7 @@ print(chain, pars = pars_save)
 traceplot(chain, pars=c("lp__")) # plot les chaines de la vraisemblance
 nrtg<-ifelse(mtype=="joint",12,6)
 traceplot(chain, pars=pars_save, nrow=nrtg) # nrow : nombre de lignes de graphe
-traceplot(chain,pars=pars_mo1)
+# traceplot(chain,pars=pars_mo1)
 ## 3 calculs : création sortie en format df et pour ggplot - choix éventuel de chaines ####
 
 chain_to_df<-function (chain_ini){
@@ -1309,7 +1309,7 @@ if(mtype%in%c("croiss","joint")){
   cr_pc_nonspe<-tab_nonspe(chain_ggpl,pars_cr1)
 
   write.csv2(cr_clim_pc_abs,file=paste(code_sim,"_cr_clim_pc_abs.csv",sep=""))
-  write.csv2(cr_pc_nonspe,file=paste(code_sim,"_nonspe.csv",sep=""))
+  write.csv2(cr_pc_nonspe,file=paste(code_sim,"cr_nonspe.csv",sep=""))
   
 # logg
   chain_logg<-chain_sel %>% 
@@ -1328,7 +1328,7 @@ if(mtype%in%c("croiss","joint")){
              paste(code_sim,"_cr_loggAbs.png",sep=""),10,7)
   
   cr_logg_pc_abs<-tab_spe(chain_logg)
-  write.csv2(cr_logg_pc_abs,file=paste(code_sim,"_cr_logg_pc_abs.csv",sep=""),dec=".")
+  write.csv2(cr_logg_pc_abs,file=paste(code_sim,"_cr_logg_pc_abs.csv",sep=""))
 
   # interaction clima_Logg
   chain_int<-chain_sel %>% 
@@ -1348,8 +1348,8 @@ if(mtype%in%c("croiss","joint")){
   
   cr_int_pc_abs<-tab_spe(chain_int)
   
-  write.csv2(cr_int_pc_abs,file=paste(code_sim,"_cr_int_pc_abs.csv",sep=""),dec=".")
-  save(cr_pc_nonspe,cr_clim_pc_abs,cr_logg_pc_abs,cr_int_pc_abs,file=paste(code_sim,"_tabpc_cr.Rdata",sep=""))
+  write.csv2(cr_int_pc_abs,file=paste(code_sim,"_cr_int_pc_abs.csv",sep=""))
+  save(cr_pc_nonspe,cr_clim_pc_abs,cr_logg_pc_abs,cr_int_pc_abs,code_sim,file=paste(code_sim,"_tabpc_cr.Rdata",sep=""))
 
 }
 if(mtype%in%c("morta","joint")){
@@ -1373,8 +1373,8 @@ if(mtype%in%c("morta","joint")){
 
   mo_pc_nonspe<-tab_nonspe(chain_ggpl,pars_mo1)
 
-  write.csv2(mo_clim_pc_abs,file=paste(code_sim,"_mo_clim_pc_abs.csv",sep=""),dec=".")
-  write.csv2(mo_pc_nonspe,file=paste(code_sim,"_nonspe.csv",sep=""),dec=".")
+  write.csv2(mo_clim_pc_abs,file=paste(code_sim,"_mo_clim_pc_abs.csv",sep=""))
+  write.csv2(mo_pc_nonspe,file=paste(code_sim,"mo_nonspe.csv",sep=""))
   
 # logg
   chain_logg<-chain_sel %>% 
@@ -1393,7 +1393,7 @@ if(mtype%in%c("morta","joint")){
              paste(code_sim,"_mo_loggAbs.png",sep=""),10,7)
   mo_logg_pc_abs<-tab_spe(chain_logg)
 
-  write.csv2(mo_logg_pc_abs,file=paste(code_sim,"_mo_logg_pc_abs.csv",sep=""),dec=".")
+  write.csv2(mo_logg_pc_abs,file=paste(code_sim,"_mo_logg_pc_abs.csv",sep=""))
  
 
 # interaction climat Logg
@@ -1414,9 +1414,9 @@ if(mtype%in%c("morta","joint")){
              paste(code_sim,"_mo_loggAbs.png",sep=""),10,7)
   mo_int_pc_abs<-tab_spe(chain_int)
   
-  write.csv2(mo_int_pc_abs,file=paste(code_sim,"_mo_int_pc_abs.csv",sep=""),dec=".")
+  write.csv2(mo_int_pc_abs,file=paste(code_sim,"_mo_int_pc_abs.csv",sep=""))
   
-  save(mo_pc_nonspe,mo_clim_pc_abs,mo_logg_pc_abs,mo_int_pc_abs,file=paste(code_sim,"_tabpc_mo.Rdata",sep=""))
+  save(mo_pc_nonspe,mo_clim_pc_abs,mo_logg_pc_abs,mo_int_pc_abs,code_sim,file=paste(code_sim,"_tabpc_mo.Rdata",sep=""))
 }
 
 ## 9 graphe vulnérabilité ####
@@ -1448,14 +1448,14 @@ load(paste(code_sim,"_tabpc_mo.Rdata",sep=""))
 load(paste(code_sim,"_tabpc_cr.Rdata",sep="")) 
 
 #climat
-graphe_vuln(mo_clim_pc_abs,cr_clim_pc_abs,"Effet du Stress Hydrique morts sur pied")
+graphe_vuln(mo_clim_pc_abs,cr_clim_pc_abs,"Effet du Stress Hydrique")
 ggsave(filename = paste(code_sim,"_vuln_clim.png",sep=""),width=10,height=7)
 #logg
-graphe_vuln(mo_logg_pc_abs,cr_logg_pc_abs,"Effet de l'exploitation morts sur pied")
+graphe_vuln(mo_logg_pc_abs,cr_logg_pc_abs,"Effet de l'exploitation")
 ggsave(filename = paste(code_sim,"_vuln_logg.png",sep=""),width=10,height=7)
 
 #int
-graphe_vuln(mo_int_pc_abs,cr_int_pc_abs,"Effet de l'interaction morts sur pied")
+graphe_vuln(mo_int_pc_abs,cr_int_pc_abs,"Effet de l'interaction")
 ggsave(filename = paste(code_sim,"_vuln_int.png",sep=""),width=10,height=7)
 
 # plot
