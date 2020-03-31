@@ -13,8 +13,11 @@ join_model_16sp_ to4.R
 *.rdata # perso
 *.csv
 *.txt
+*.xls*
+
 
 *.jpg
+*.png
 *.tex
 *.log
 
@@ -32,12 +35,13 @@ join_model_16sp_ to4.R
 # repertoires annexes
 /Archives/*
 /stan_sorties/*
+/tab_param_sorties/*
 /prepa_donnees/debug/*
 /prepa_donnees/Logging/*
 /prepa_donnees/Climat/Biljou/*
 /prepa_donnees/Climat/Meteo Guyaflux/*
 /prepa_donnees/Climat/Vincent_F/*
-/prepa_donnees/Climat/REW_gfclim/donnes_clim/*
+/prepa_donnees/Climat/REW_gfclim/donnees_clim/*
 /prepa_donnees/Climat/REW_gfclim/SWMviaOriginalCode/*
 /prepa_donnees/Climat/REW_gfclim/Donnees_climat_pre-traitement_cache/*
 
