@@ -31,7 +31,7 @@ Library(c("knitr","raster","tidyverse",
 
 
 # load("prepa_donnees/Data16esp_s0_to_join.Rdata") # issu de Donnees_guyafor-pre-traitement.Rmd
-load("prepa_donnees/Data_guyafor_mch_join.Rdata")
+load("prepa_donnees/Data_guyafor_16esp_PPlogg_join.Rdata")
 # metadata 
      #nbmin_arbres,            # nombre minimal d'arbres par esp et par site
      #nbmin_mes,               # nombre minimal de mesures par arbres
@@ -43,7 +43,7 @@ load("prepa_donnees/Data_guyafor_mch_join.Rdata")
      #tab_site_logg,           # effectif d'arbres et mesures par site, par traitement et par espèce
      #esp_range_dmax,          # Min et max des dmax95 par espèce
      #Dmax_esp_site,           # dmax par espèce et par site
-     #cc_espGFClim,            # correspondance espèce et code-espèce
+     #espGFClim,            # correspondance espèce et code-espèce
      #ParacouInvIsh,           # valeur indice stress hydrique par forest et par int. d'inventaire
      #index_trait,              # valeur indice exploitation par site
      #datacr_cl_lo,            # données pour le modèle de croissance
@@ -924,27 +924,108 @@ Fpred_jo_inter<-function(i,param_med,mo_dataClim,mo_dataLogg,mo_datamed){
 }
 
 
-## tableau d'initialisation boucle pred_cr ####
-cr_datamed<-apply(select(donnee_cr,dbh_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variables
-names(cr_datamed)<-colnames(select(donnee_cr,dbh_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr))
+## tableaux d'initialisation des boucles de calcul ####
 
-cr_dataspe<-select(donnee_cr,dbhmax_cr,WD_cr,rgEsp_cr) %>% # tableau des variables dpdtes de l'espèce
+## tableau d'initialisation boucle pred_cr 
+if(mtype%in%c("croiss","joint")){
+ cr_datamed<-apply(select(donnee_cr,dbh_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr),2,median) # on extrait les médianes des variables
+ names(cr_datamed)<-colnames(select(donnee_cr,dbh_cr,dbhmax_cr,clim_cr,logg_cr,WD_cr))
+
+ cr_dataspe<-select(donnee_cr,dbhmax_cr,WD_cr,rgEsp_cr) %>% # tableau des variables dpdtes de l'espèce
   group_by(rgEsp_cr) %>% 
   summarise(WD_cr=median(WD_cr),dbhmax_cr=median(dbhmax_cr))
 
-onto<-seq(0.08,2,by=0.08) #abscisse pour calcul du modèle"
-cr_dataclim<-seq(min(donnee_cr$clim_cr),max(donnee_cr$clim_cr),
+ onto<-seq(0.08,2,by=0.08) #abscisse pour calcul du modèle"
+ cr_dataclim<-seq(min(donnee_cr$clim_cr),max(donnee_cr$clim_cr),
               by=(max(donnee_cr$clim_cr)-min(donnee_cr$clim_cr))/20)
-cr_datalogg<-seq(min(donnee_cr$logg_cr),max(donnee_cr$logg_cr),
+ cr_datalogg<-seq(min(donnee_cr$logg_cr),max(donnee_cr$logg_cr),
               by=(max(donnee_cr$logg_cr)-min(donnee_cr$logg_cr))/20)
 
-repet<-10 # répétitions par ligne de paramètre et par abscisse (onto)
+ repet<-10 # répétitions par ligne de paramètre et par abscisse (onto)
 
-vparam<-chain_sel %>% 
+ vparam_cr<-chain_sel %>% 
   select(-lp__) %>% 
   # slice(3951:4000)
   slice((nrow(chain_sel)-50):nrow(chain_sel)) # on sélectionne les 50 derniers jeux de paramètres
+}
 
+## tableau d'initialisation boucle pred_mo et pred_jo
+if(mtype%in%c("morta","joint")){
+  
+  mo_datamed<-apply(select(donnee_mo,-rgEsp_mo,-especes),2,median) # on extrait les médianes des variables
+  names(mo_datamed)<-colnames(select(donnee_mo,-rgEsp_mo,-especes))
+
+  mo_dmaxspe<-select(donnee_mo,dbhmax_mo,rgEsp_mo) %>% # tableau des variables dpdtes de l'espèce
+    group_by(rgEsp_mo) %>% 
+    summarise(dbhmaxspe_mo=median(dbhmax_mo))
+
+ diam<-seq(10,130,by=5) # exploration range des diamètres
+ mo_dataclim<-seq(min(donnee_mo$clim_mo),max(donnee_mo$clim_mo),
+              by=(max(donnee_mo$clim_mo)-min(donnee_mo$clim_mo))/50) # exploration range des stress hydrique
+ mo_datalogg<-seq(min(donnee_mo$logg_mo),max(donnee_mo$logg_mo),
+              by=(max(donnee_mo$logg_mo)-min(donnee_mo$logg_mo))/50) # exploration range des indexLogg
+
+  
+  vparam_mo<-chain_sel %>% # pour calcul prédiction avec bruits
+    select(-lp__) %>% 
+    slice((nrow(chain_sel)-250):nrow(chain_sel))
+}
+
+## Function graphe  ####
+
+pc_by_spe<-function(pred_pc){
+  pred<-pred_pc%>% 
+    pivot_longer(
+      cols= starts_with("param"),
+      names_to="num_param",
+      # names_prefix = "param",
+      # names_ptypes=list(param=integer()),# pour tranformer les titre de colonne parame en entier
+      values_to = "predictions") %>% 
+    mutate(nesp=as.numeric(substr(num_param,nchar("param")+1,nchar(num_param)))) %>% 
+    left_join(tesp,by="nesp")
+  pred$predictions<-unlist(pred$predictions)
+  return(pred)  
+}
+
+graph_inter<-function(pred_pc_inter,titre,legende){
+  ggplot(pred_pc_inter,aes(x=Loggs,y=Clims,z=predictions))+
+    geom_raster(aes(fill=predictions))+
+    # geom_tile (aes(fill=predictions))+
+    # geom_contour(aes(),colour="black",size=2)+
+    stat_contour(bins = 15,color="black") +  # nombre et couleur des lignes de contour
+    labs(title=titre,x ="Exploitation Forestière",y="Stress Hydrique") +
+    guides(fill = guide_colorbar(title = legende))+
+    # lineend = "butt", linejoin = "round",
+    # linemitre = 10, na.rm = FALSE, show.legend = NA,
+    # inherit.aes = TRUE)
+    scale_y_continuous(breaks = seq(-6,20,2)) +
+    scale_x_continuous(breaks = seq(-10,50,10))+
+    scale_fill_gradientn(colours=rainbow(4)) # changement couleur 
+}
+
+graph_inter_spe<-function(pred_gg,titre,legende,zz){
+  ggplot(pred_gg,aes(x=Loggs,y=Clims,z=zz))+
+    facet_wrap(~especes)+
+    # geom_raster(aes(fill=predictions))+
+    # stat_contour(geom="polygon",aes(fill=..level..))+
+    geom_tile (aes(fill=zz))+
+    stat_contour(bins = 15,color="black") +
+    labs(title=titre, x="Exploitation Forestière", y="Stress Hydrique") +
+    guides(fill = guide_colorbar(title = legende))+
+    scale_fill_gradientn(colours=rainbow(4)) # changement couleur 
+}
+
+# interactions une espèces
+graph_inter_1spe<-function(pred_gg,titre,legende,zz,genrespece){
+ zz<-zz[pred_gg$especes==genrespece]
+ ggplot(filter(pred_gg,especes==genrespece),aes(x=Loggs,y=Clims,z=zz))+
+    # geom_raster(aes(fill=predictions))+
+    geom_tile (aes(fill=zz))+
+    stat_contour(bins = 15,color="black") +
+    labs(title=paste(titre,", ",genrespece,sep=""), x="Exploitation Forestière", y="Stress Hydrique") +
+    guides(fill = guide_colorbar(title = legende))+
+    scale_fill_gradientn(colours=rainbow(4)) # changement couleur 
+}
 
 
 # Boucles Fpred_cr_spe et graphe 2 variables ####
@@ -959,18 +1040,18 @@ pred_pparam<-matrix(data=NA,nrow=nn,ncol=0)
 # k<-1
 # for(k in 1:max(Nesp)){
 temps_depart<-Sys.time()
-for(j in 1:nrow(vparam)){
+for(j in 1:nrow(vparam_cr)){
   srt<-rep(NA,nn)
-  cr_sigGesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigGesp"]))
-  cr_sigClesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigClesp"]))
-  # cr_sigLoesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigLoesp"]))
-  sigma<-rnorm(nn,mean=0,as.numeric(vparam[j,]["sigma"]))
+  cr_sigGesp<-rnorm(nn,mean=0,as.numeric(vparam_cr[j,]["cr_sigGesp"]))
+  cr_sigClesp<-rnorm(nn,mean=0,as.numeric(vparam_cr[j,]["cr_sigClesp"]))
+  # cr_sigLoesp<-rnorm(nn,mean=0,as.numeric(vparam_cr[j,]["cr_sigLoesp"]))
+  sigma<-rnorm(nn,mean=0,as.numeric(vparam_cr[j,]["sigma"]))
   sig<-data.frame(cr_sigGesp,cr_sigClesp,
                   # cr_sigLoesp,
                   sigma)
     for(k in 1:Nbesp){
       for (i in 1:nn){
-        srt[i]<-Fpred_cr_spe(i,vparam[j,],ontos,datamed,dataspe,sig,k)
+        srt[i]<-Fpred_cr_spe(i,vparam_cr[j,],ontos,datamed,dataspe,sig,k)
       }
     pred_pparam<-cbind(pred_pparam,srt)
     colnames(pred_pparam)[k+(j-1)*Nbesp]<-paste("param",j,"_sp",k,sep="")
@@ -981,19 +1062,8 @@ Sys.time()- temps_depart
 pred_pc<-as.data.frame(pred_pparam)
 pred_pc$ontos<-ontos 
 
-pred_pc<-pred_pc%>% 
-  pivot_longer(
-    cols= starts_with("param"),
-    names_to="num_param",
-    # names_prefix = "param",
-    # names_ptypes=list(param=integer()),# pour tranformer les titre de colonne parame en entier
-    values_to = "predictions") %>% 
-  mutate(nesp=as.numeric(substr(num_param,nchar(num_param),nchar(num_param)))) %>% 
-  left_join(tesp,by="nesp") %>% 
-  arrange(nesp,ontos)
-
-pred_pc$predictions<-unlist(pred_pc$predictions) # quantile() plante si les données sont sous forme de liste 
-
+pred_pc<-pc_by_spe(pred_pc) 
+  
 pred_pc<-pred_pc%>% 
   group_by(especes,ontos) %>% 
   # summarise(test=n())
@@ -1027,21 +1097,21 @@ pred_pparam<-matrix(data=NA,nrow=nnvi,ncol=0)
 # j<-1
 # k<-1
 # for(k in 1:max(Nesp)){
-for(j in 1:nrow(vparam)){
+for(j in 1:nrow(vparam_cr)){
   srt<-rep(NA,nnvi)
-  cr_sigGesp<-rnorm(nnvi,mean=0,as.numeric(vparam[j,]["cr_sigGesp"]))
-  cr_sigClesp<-rnorm(nnvi,mean=0,as.numeric(vparam[j,]["cr_sigClesp"]))
-  # cr_sigLoesp<-rnorm(nn,mean=0,as.numeric(vparam[j,]["cr_sigLoesp"]))
-  sigma<-rnorm(nnvi,mean=0,as.numeric(vparam[j,]["sigma"]))
+  cr_sigGesp<-rnorm(nnvi,mean=0,as.numeric(vparam_cr[j,]["cr_sigGesp"]))
+  cr_sigClesp<-rnorm(nnvi,mean=0,as.numeric(vparam_cr[j,]["cr_sigClesp"]))
+  # cr_sigLoesp<-rnorm(nn,mean=0,as.numeric(vparam_cr[j,]["cr_sigLoesp"]))
+  sigma<-rnorm(nnvi,mean=0,as.numeric(vparam_cr[j,]["sigma"]))
   sig<-data.frame(cr_sigGesp,cr_sigClesp,
                   # cr_sigLoesp,
                   sigma)
   for(k in 1:Nbesp){
     for (i in 1:nnvi){
-      srt[i]<-Fpred_cr_spe_clim(i,vparam[j,],ontos,clims,datamed,dataspe,sig,k)
+      srt[i]<-Fpred_cr_spe_clim(i,vparam_cr[j,],ontos,clims,datamed,dataspe,sig,k)
     }
     
-    # srt<-lapply(X=1:nn, FUN=Fpred_cr(,vparam[j,],ontos,datamed,sig))
+    # srt<-lapply(X=1:nn, FUN=Fpred_cr(,vparam_cr[j,],ontos,datamed,sig))
     pred_pparam<-cbind(pred_pparam,srt)
     colnames(pred_pparam)[k+(j-1)*Nbesp]<-paste("param",j,"_sp",k,sep="")
   }
@@ -1097,7 +1167,9 @@ ggplot(pred_pc1,aes(x=Ontos,y=Clims))+
   geom_line (aes(x=ontos,y=pc01),color="grey",size=0.5,linetype = "dashed") +
   geom_line (aes(x=ontos,y=pc99),color="grey",size=0.5,linetype = "dashed")
   
-# Boucle  Fpred_cr_inter####
+# Boucle  Fpred_cr_inter et Boucle  Fpred_cr_inter_spe ####
+  
+# Boucle  Fpred_cr_inter 
   nnvi<-length(cr_datalogg)*length(cr_dataclim) # nombre de simulations pour un jeu de paramètres 
   loggs<-rep(cr_datalogg,each=length(cr_dataclim)) # Logg pour une valeur de paramètres
   clims<-rep(cr_dataclim,length(cr_datalogg)) # indice stress hydrique pour une valeur de paramètres
@@ -1108,7 +1180,7 @@ ggplot(pred_pc1,aes(x=Ontos,y=Clims))+
   i<-1
   srt<-rep(NA,nnvi)
   for(i in 1:nnvi){
-    srt[i]<-Fpred_cr_inter(i,param,clims,loggs,cr_datamed)
+    srt[i]<-Fpred_cr_inter(i,param_med,clims,loggs,cr_datamed)
   }
   pred_pparam<-cbind(pred_pparam,srt)
   colnames(pred_pparam)[1]<-paste("valeurs")
@@ -1121,12 +1193,11 @@ ggplot(pred_pc1,aes(x=Ontos,y=Clims))+
   
   save(pred_pc_inter,file=paste(code_sim,"_predinter_cr.Rdata",sep=""))
   
+  graph_inter(pred_pc_inter,"Processus de croissance : effet de l'intéraction ","Log(Acc+1)")
+  ggsave(filename =paste(code_sim,"inter_nonspe_cr.png"),width = 7,height = 5 )
   
-  
-# Boucle  Fpred_cr_inter_spe ####
-  nnvi<-length(cr_datalogg)*length(cr_dataclim) # nombre de simulations pour un jeu de paramètres 
-  loggs<-rep(cr_datalogg,each=length(cr_dataclim)) # Logg pour une valeur de paramètres
-  clims<-rep(cr_dataclim,length(cr_datalogg)) # indice stress hydrique pour une valeur de paramètres
+
+# Boucle  Fpred_cr_inter_spe 
   # Nbesp<-nrow(tesp)
   Nbesp<-16
   
@@ -1139,7 +1210,7 @@ ggplot(pred_pc1,aes(x=Ontos,y=Clims))+
   for(k in 1:Nbesp){
     srt<-rep(NA,nnvi)
     for(i in 1:nnvi){
-      srt[i]<-Fpred_cr_inter_spe(i,param,clims,loggs,cr_datamed,cr_dataspe,k)
+      srt[i]<-Fpred_cr_inter_spe(i,param_med,clims,loggs,cr_datamed,cr_dataspe,k)
     }
     pred_pparam<-cbind(pred_pparam,srt)
     colnames(pred_pparam)[k]<-paste("param",k,sep="")
@@ -1151,31 +1222,18 @@ ggplot(pred_pc1,aes(x=Ontos,y=Clims))+
   pred_pc$Clims<-clims
   pred_pc$Clims_ch<-as.character(clims)
   
-  save(pred_pc_inter,file=paste(code_sim,"_predinterspe_cr.Rdata",sep=""))
+  save(pred_pc,file=paste(code_sim,"_predinterspe_cr.Rdata",sep=""))
   
+  pred_gg<-pc_by_spe(pred_pc) # toutes les donnée espèces sur une colonne "predictions"
+  pred_gg<-pred_gg %>% mutate(logAcc=predictions)
   
+  graph_inter_spe(pred_gg,"Processus de croissance : interaction","Log(Acc+1)",pred_gg$logAcc)
+  ggsave(filename =paste(code_sim,"inter_spe_cr.png"),width = 11,height = 8 )
   
-  ## tableau d'initialisation boucle pred_mo et pred_jo ####
-if(mtype%in%c("morta","joint")){
+  # graphe d'une espèce en particulier
+  graph_inter_1spe(pred_gg,"Processus de croissance : interaction","Log(Acc+1)",
+                   pred_gg$logAcc,"Vouacapoua americana")
   
-  mo_datamed<-apply(select(donnee_mo,-rgEsp_mo,-especes),2,median) # on extrait les médianes des variables
-  names(mo_datamed)<-colnames(select(donnee_mo,-rgEsp_mo,-especes))
-
-  mo_dmaxspe<-select(donnee_mo,dbhmax_mo,rgEsp_mo) %>% # tableau des variables dpdtes de l'espèce
-    group_by(rgEsp_mo) %>% 
-    summarise(dbhmaxspe_mo=median(dbhmax_mo))
-
- diam<-seq(10,130,by=5) # exploration range des diamètres
- mo_dataclim<-seq(min(donnee_mo$clim_mo),max(donnee_mo$clim_mo),
-              by=(max(donnee_mo$clim_mo)-min(donnee_mo$clim_mo))/50) # exploration range des stress hydrique
- mo_datalogg<-seq(min(donnee_mo$logg_mo),max(donnee_mo$logg_mo),
-              by=(max(donnee_mo$logg_mo)-min(donnee_mo$logg_mo))/50) # exploration range des indexLogg
-
-  
-  vparam<-chain_sel %>% # pour calcul prédiction avec bruits
-    select(-lp__) %>% 
-    slice((nrow(chain_sel)-250):nrow(chain_sel))
-}
   
 # Boucles Fpred_mo_spe_clim et graphe a 3 variables ####
 
@@ -1191,15 +1249,15 @@ pred_pparam<-matrix(data=NA,nrow=nnvi,ncol=0)
 # j<-1
 # k<-1
 # for(k in 1:max(Nesp)){
-pb <- txtProgressBar(min = 0, max = nrow(vparam), style = 3)
+pb <- txtProgressBar(min = 0, max = nrow(vparam_mo), style = 3)
 db=0
 
-for(j in 1:nrow(vparam)){
+for(j in 1:nrow(vparam_mo)){
   db=db+1
   srt<-rep(NA,nnvi)
   for(k in 1:Nbesp){
     for (i in 1:nnvi){
-      srt[i]<-Fpred_mo_spe_clim(i,vparam[j,],diams,clims,mo_datamed,mo_dmaxspe,k)
+      srt[i]<-Fpred_mo_spe_clim(i,vparam_mo[j,],diams,clims,mo_datamed,mo_dmaxspe,k)
     }
     
     pred_pparam<-cbind(pred_pparam,srt)
@@ -1214,7 +1272,9 @@ pred_pc$Diams<-diams
 pred_pc$Clims<-clims
 pred_pc$Clims_ch<-as.character(clims)
 
-# Boucle  Fpred_mo_inter_spe####
+# Boucle  Fpred_mo_inter_spe et Boucle  Fpred_mo_inter ####
+
+# Boucle  Fpred_mo_inter_spe
 nnvi<-length(mo_datalogg)*length(mo_dataclim) # nombre de simulations pour un jeu de paramètres 
 loggs<-rep(mo_datalogg,each=length(mo_dataclim)) # Logg pour une valeur de paramètres
 clims<-rep(mo_dataclim,length(mo_datalogg)) # indice stress hydrique pour une valeur de paramètres
@@ -1223,14 +1283,14 @@ Nbesp<-16
 
 temps_depart<-Sys.time()
 pred_pparam<-matrix(data=NA,nrow=nnvi,ncol=0)
-i<-1
-j<-1
-k<-1
+# i<-1
+# j<-1
+# k<-1
 # for(k in 1:max(Nesp)){
  for(k in 1:Nbesp){
   srt<-rep(NA,nnvi)
    for(i in 1:nnvi){
-     srt[i]<-Fpred_mo_inter_spe(i,param,clims,loggs,mo_datamed,mo_dmaxspe,k)
+     srt[i]<-Fpred_mo_inter_spe(i,param_med,clims,loggs,mo_datamed,mo_dmaxspe,k)
     }
     pred_pparam<-cbind(pred_pparam,srt)
     colnames(pred_pparam)[k]<-paste("param",k,sep="")
@@ -1241,20 +1301,29 @@ pred_pc<-as.data.frame(pred_pparam)
 pred_pc$Loggs<-loggs 
 pred_pc$Clims<-clims
 
-save(pred_pc,file="stan_paracou30ncl_mo5_i4_predinter_spe.Rdata")
+save(pred_pc,file=paste(code_sim,"_predinter_spe.Rdata"))
 
-# Boucle  Fpred_mo_inter####
-nnvi<-length(mo_datalogg)*length(mo_dataclim) # nombre de simulations pour un jeu de paramètres 
-loggs<-rep(mo_datalogg,each=length(mo_dataclim)) # Logg pour une valeur de paramètres
-clims<-rep(mo_dataclim,length(mo_datalogg)) # indice stress hydrique pour une valeur de paramètres
-# Nbesp<-nrow(tesp)
+pred_gg<-pc_by_spe(pred_pc) 
+pred_gg<-pred_gg %>% 
+  mutate(logitm1=exp(predictions)/(1+exp(predictions))) # on calcule le logit-1(pred) c'est à dire la probabilité de mort prévu pour chaque individus
+
+graph_inter_spe(pred_gg,"Processus de mortalité : interaction","Proba mort",pred_gg$logitm1)
+ggsave(filename =paste(code_sim,"inter_spe_mo.png"),width = 10,height = 7 )
+
+# graphe d'une espèce en particulier
+graph_inter_1spe(pred_gg,"Processus de mortalité : interaction","Proba mort",
+                 pred_gg$logAcc,"Carapa procera")
+
+
+
+# Boucle  Fpred_mo_inter
 
 temps_depart<-Sys.time()
 pred_pparam<-matrix(data=NA,nrow=nnvi,ncol=0)
 i<-1
 srt<-rep(NA,nnvi)
 for(i in 1:nnvi){
-    srt[i]<-Fpred_mo_inter(i,param,clims,loggs,mo_datamed)
+    srt[i]<-Fpred_mo_inter(i,param_med,clims,loggs,mo_datamed)
   }
 pred_pparam<-cbind(pred_pparam,srt)
 colnames(pred_pparam)[1]<-paste("valeurs")
@@ -1265,7 +1334,10 @@ pred_pc_inter$Loggs<-loggs
 pred_pc_inter$Clims<-clims
 pred_pc_inter$predictions<-exp(pred_pc_inter$valeurs)/(1+exp(pred_pc_inter$valeurs))
 
-save(pred_pc_inter,file="stan_paracou30ncl_mo5_i4_predinter.Rdata")
+save(pred_pc_inter,file=paste(code_sim,"_predinter.Rdata"))
+
+graph_inter(pred_pc_inter,"Processus de mortalité : effet de l'intéraction ","Probabilité de mort")
+ggsave(filename =paste(code_sim,"inter_nonspe_mo.png"),width = 7,height = 5 )
 
 
 # Boucle  Fpred_jo_inter####
@@ -1295,18 +1367,9 @@ save(pred_pc_inter,file=paste(code_sim,"_predinter_mo.Rdata",sep=""))
 
 ## graphe prédictions par espèces####
 
-pred_gg<-pred_pc%>% 
-  pivot_longer(
-    cols= starts_with("param"),
-    names_to="num_param",
-    # names_prefix = "param",
-    # names_ptypes=list(param=integer()),# pour tranformer les titre de colonne parame en entier
-    values_to = "predictions") %>% 
-  mutate(nesp=as.numeric(substr(num_param,nchar("param")+1,nchar(num_param)))) %>% 
-  left_join(tesp,by="nesp")  
-  # arrange(nesp,Diams,Clims)  
-
-pred_gg$predictions<-unlist(pred_gg$predictions) # quantile() plante si les données sont sous forme de liste 
+pred_gg<-pc_by_spe(pred_pc) 
+  
+ # quantile() plante si les données sont sous forme de liste 
 
 if(mtype%in%c("morta","joint")) pred_gg<-pred_gg %>% 
                    mutate(logitm1=exp(predictions)/(1+exp(predictions))) # on calcule le logit-1(pred) c'est à dire la probabilité de mort prévu pour chaque individus
@@ -1345,56 +1408,7 @@ facet_wrap(~especes)
 geom_line (aes(x=ontos,y=pc01),color="grey",size=0.5,linetype = "dashed") +
   geom_line (aes(x=ontos,y=pc99),color="grey",size=0.5,linetype = "dashed")
 
-#interactions
-graph_inter_spe<-function(pred_gg,titre,legende,zz){
-  ggplot(pred_gg,aes(x=Loggs,y=Clims,z=zz))+
-   facet_wrap(~especes)+
-   # geom_raster(aes(fill=predictions))+
-   stat_contour(geom="polygon",aes(fill=..level..))+
-   geom_tile (aes(fill=zz))+
-   stat_contour(bins = 15) +
-   labs(tittle=titre, x="Exploitation Forestière", y="Stress Hydrique") +
-   guides(fill = guide_colorbar(title = legende))
-}
 
-graph_inter_spe(pred_gg,"Processus de mortalité : interaction","Proba mort",logitm1)
-
-graph_inter_spe(pred_gg,"Processus de croissance : interaction","Log(Acc+1)",pred_gg$logAcc)
-ggsave(filename =paste(code_sim,"inter_spe_cr.png"),width = 9,height = 6 )
-
-# par espèces
-ggplot(filter(pred_gg,especes=="Goupia glabra"),aes(x=Loggs,y=Clims,z=logitm1))+
-  # geom_raster(aes(fill=predictions))+
-  stat_contour(geom="polygon",aes(fill=..level..))+
-  geom_tile (aes(fill=logitm1))+
-  stat_contour(bins = 15) +
-  xlab("Exploitation Forestière") +
-  ylab("Stress Hydrique") +
-  guides(fill = guide_colorbar(title = "Proba mort"))+
-  ggtitle("Goupia glabra")
-
-
-# graphe prédictions inter ####
-graph_inter<-function(pred_pc_inter,titre,legende){
-  ggplot(pred_pc_inter,aes(x=Loggs,y=Clims,z=predictions))+
-  # geom_raster(aes(fill=predictions))+
-  geom_tile (aes(fill=predictions))+
-  # geom_contour(aes(),colour="black",size=2)+
-  stat_contour(bins = 15,color="black") +  # nombre et couleur des lignes de contour
-  labs(title=titre,x ="Exploitation Forestière",y="Stress Hydrique") +
-  guides(fill = guide_colorbar(title = legende))+
-               # lineend = "butt", linejoin = "round",
-               # linemitre = 10, na.rm = FALSE, show.legend = NA,
-               # inherit.aes = TRUE)
-  scale_y_continuous(breaks = seq(-6,20,2)) +
-  scale_x_continuous(breaks = seq(-10,50,10))
-}
-
-graph_inter(pred_pc_inter,"Processus de croissance : effet de l'intéraction ","Log(Acc+1)")
-ggsave(filename =paste(code_sim,"inter_nonspe_cr.png"),width = 7,height = 5 )
-
-graph_inter(pred_pc_inter,"Processus de mortalité : effet de l'intéraction ","Probabilité de mort")
-ggsave(filename =paste(code_sim,"inter_nonspe_mo.png"),width = 7,height = 5 )
 
 ## 8 Posterior et tableau quantile par espèce####
 poster_abs<-function(chaine,legende,nomfich,largeur,hauteur){
